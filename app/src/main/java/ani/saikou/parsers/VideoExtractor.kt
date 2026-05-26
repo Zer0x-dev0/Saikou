@@ -9,6 +9,7 @@ import java.io.Serializable
  *
  * A new instance is created for every embeds/iframes of that Episode
  * **/
+
 abstract class VideoExtractor : Serializable {
     abstract val server: VideoServer
     var videos: List<Video> = listOf()
@@ -60,6 +61,7 @@ abstract class VideoExtractor : Serializable {
  * Represents a separate audio track that can be merged with any video stream
  * Perfect for sources that provide video-only + audio-only segments
  * */
+
 data class AudioTrack(
     /** Direct URL to the audio file/segment */
     val url: String,

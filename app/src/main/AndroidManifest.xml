@@ -81,8 +81,17 @@
         <activity android:name=".media.CharacterDetailsActivity" />
         <activity android:name=".home.NoInternet" />
 
+<!--        <activity-->
+<!--            android:name="ani.saikou.media.anime.ExoplayerView"-->
+<!--            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"-->
+<!--            android:excludeFromRecents="true"-->
+<!--            android:exported="true"-->
+<!--            android:label="@string/video"-->
+<!--            android:launchMode="singleTask"-->
+<!--            android:supportsPictureInPicture="true"-->
+<!--            tools:targetApi="n" />-->
         <activity
-            android:name="ani.saikou.media.anime.ExoplayerView"
+            android:name="ani.saikou.media.anime.mpv.PlayerActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
             android:excludeFromRecents="true"
             android:exported="true"
@@ -90,7 +99,6 @@
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             tools:targetApi="n" />
-
         <activity
             android:name="ani.saikou.connections.anilist.Login"
             android:configChanges="orientation|screenSize|layoutDirection"
