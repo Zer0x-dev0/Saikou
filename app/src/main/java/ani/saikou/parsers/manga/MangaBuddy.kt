@@ -1,67 +1,208 @@
 package ani.saikou.parsers.manga
 
+import android.util.Log
 import ani.saikou.FileUrl
+import ani.saikou.Mapper.json
 import ani.saikou.client
-import ani.saikou.findBetween
 import ani.saikou.parsers.MangaChapter
 import ani.saikou.parsers.MangaImage
 import ani.saikou.parsers.MangaParser
 import ani.saikou.parsers.ShowResponse
+import kotlinx.serialization.InternalSerializationApi
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
+
+@OptIn(InternalSerializationApi::class)
 class MangaBuddy : MangaParser() {
 
     override val name = "MangaBuddy"
     override val saveName = "manga_buddy"
-    override val hostUrl = "https://mangabuddy.com"
+    override val hostUrl = "https://mangak.io"
 
-    val headers = mapOf("referer" to hostUrl)
+    private val apiUrl = "https://api.mangak.io"
 
-    override suspend fun loadChapters(mangaLink: String, extra: Map<String, String>?): List<MangaChapter> {
-
-        val res = client.get("$hostUrl/api/manga${mangaLink}/chapters?source=detail")
-            .document.select("#chapter-list>li").reversed()
-
-        return res.mapNotNull {
-            if (it.select("strong").text().contains("Chapter")) {
-                val chap = Regex("(Chapter ([A-Za-z0-9.]+))( ?: ?)?( ?(.+))?").find(it.select("strong").text())?.destructured
-                val number: String
-                var title: String? = null
-                val link = hostUrl + it.select("a").attr("href")
-                if (chap != null) {
-                    number = chap.component2()
-                    title = chap.component5()
-                } else {
-                    number = it.select("strong").text()
-                }
-                MangaChapter(number, link, title)
-            } else null
-        }
-    }
-
-    override suspend fun loadImages(chapterLink: String): List<MangaImage> {
-        val res = client.get(chapterLink).text
-        val arr = res.findBetween("var chapImages = ", "\n")?.trim('\'')?.split(",")
-
-        return (arr ?: return listOf()).map {
-            val link = FileUrl(it, headers)
-            MangaImage(link)
-        }
-    }
+    private val headers = mapOf(
+        "Referer" to "$hostUrl/"
+    )
 
     override suspend fun search(query: String): List<ShowResponse> {
-        val doc = client.get("$hostUrl/search?status=all&sort=views&q=$query")
-            .document.select(".list > .book-item > .book-detailed-item > .thumb > a")
 
-        return doc.mapNotNull {
-            if (it.attr("title") != "") {
+        val url = "$apiUrl/titles/search?exclude=yaoi&page=1&limit=7&q=$query"
+
+        return try {
+
+            val response = client.get(url)
+            val bodyText = response.body.string()
+            if (bodyText.isBlank()) {
+                return emptyList()
+            }
+
+            val res = try {
+                json.decodeFromString<SearchResponse>(bodyText)
+            } catch (e: Exception) {
+                return emptyList()
+            }
+
+            val results = res.data.items.mapIndexed { index, it ->
                 ShowResponse(
-                    it.attr("title"),
-                    it.attr("href"),
-                    FileUrl(it.select("img").attr("data-src"), headers)
+                    name = it.name,
+                    link = it.id,
+                    coverUrl = FileUrl(
+                        url = it.cover,
+                        headers = headers
+                    )
                 )
             }
-            else null
+
+            results
+        } catch (e: Exception) {
+            emptyList()
         }
     }
+
+
+    override suspend fun loadChapters(
+        mangaLink: String,
+        extra: Map<String, String>?
+    ): List<MangaChapter> {
+
+        val url = "$apiUrl/titles/$mangaLink/chapters?cv=${System.currentTimeMillis()}"
+        return try {
+            val response = client.get(url)
+            val body = response.body.string()
+            val res = json.decodeFromString<ChapterResponse>(body ?: "")
+
+            val sorted = res.data.chapters
+                .sortedBy { it.chapterNumber ?: Float.MAX_VALUE }
+            val result = sorted.map {
+                MangaChapter(
+                    number = it.chapterNumber?.toString() ?: it.name,
+                    link = it.url,
+                    title = it.name
+                )
+            }
+
+            result
+
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+
+    override suspend fun loadImages(chapterLink: String): List<MangaImage> {
+
+        return try {
+            val url = if (chapterLink.startsWith("http")) {
+                chapterLink
+            } else {
+                "$hostUrl$chapterLink"
+            }
+
+
+            val response = client.get(url)
+            val body = response.body.string()
+
+            if (body.isBlank()) {
+                return emptyList()
+            }
+
+            val jsonStart = body.indexOf("<script id=\"__NEXT_DATA__\"")
+
+            if (jsonStart == -1) {
+                return emptyList()
+            }
+
+            val jsonStartTag = body.indexOf(">", jsonStart) + 1
+            val jsonEndTag = body.indexOf("</script>", jsonStartTag)
+
+            if (jsonStartTag <= 0 || jsonEndTag <= 0) {
+                return emptyList()
+            }
+
+            val jsonString = body.substring(jsonStartTag, jsonEndTag)
+            val root = json.decodeFromString<Map<String, JsonElement>>(jsonString)
+
+
+            val pageProps = root["props"]
+                ?.jsonObject
+                ?.get("pageProps")
+                ?.jsonObject
+
+            if (pageProps == null) {
+                return emptyList()
+            }
+
+            val initialChapter = pageProps["initialChapter"]?.jsonObject
+
+            if (initialChapter == null) {
+                return emptyList()
+            }
+
+            val images = initialChapter["images"]
+                ?.jsonArray
+                ?.map { it.jsonPrimitive.content }
+
+            if (images.isNullOrEmpty()) {
+                return emptyList()
+            }
+
+            val result = images.mapIndexed { index, it ->
+
+                MangaImage(
+                    FileUrl(it, headers)
+                )
+            }
+
+
+            result
+
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @Serializable
+    data class SearchResponse(
+        val data: SearchData
+    )
+
+    @Serializable
+    data class SearchData(
+        val items: List<MangaItemDto> = emptyList(),
+
+        )
+
+
+    @Serializable
+    data class MangaItemDto(
+        val id: String,
+        val name: String,
+        val cover: String,
+        val url: String
+    )
+    @Serializable
+    data class ChapterResponse(
+        val data: ChapterList
+    )
+    @Serializable
+    data class ChapterList(
+        val chapters: List<ChapterItem> = emptyList()
+    )
+
+    @Serializable
+    data class ChapterItem(
+        val url: String,
+        val name: String,
+        @SerialName("updated_at") val updatedAt: String? = null,
+        @SerialName("chapter_number") val chapterNumber: Float? = null
+    )
 
 }

@@ -1,5 +1,5 @@
 ## Version 1.2.5-beta
 
-### Fixes
+### Enhancements
 
-- **Anime providers:** Minor fixes.
+* Search: Improve auto search for manga providers 
