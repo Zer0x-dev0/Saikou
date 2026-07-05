@@ -20,6 +20,7 @@ import ani.saikou.databinding.ItemStreamBinding
 import ani.saikou.databinding.ItemUrlBinding
 import ani.saikou.media.Media
 import ani.saikou.media.MediaDetailsViewModel
+import ani.saikou.media.anime.mpv.MediaBridge
 import ani.saikou.media.anime.mpv.PlayerActivity
 import ani.saikou.others.Download.download
 import ani.saikou.parsers.VideoExtractor
@@ -87,10 +88,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             if (size!=null && size >= media!!.selected!!.video) {
                                 media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedExtractor = selected
                                 media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedVideo = media!!.selected!!.video
-                                startExoplayer(media!!)
+                                startMPVPlayer(media!!)
                             } else fail()
                         }
-                        
+
                         if (ep.extractors.isNullOrEmpty()) {
                             model.getEpisode().observe(this) {
                                 if (it != null) {
@@ -172,16 +173,17 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
 //        }
 //    }
 
-    fun startExoplayer(media: Media) {
+
+    fun startMPVPlayer(media: Media) {
         prevEpisode = null
         dismiss()
 
         if (launch == true) {
             stopAddingToList()
-            val intent = Intent(requireActivity(), PlayerActivity::class.java).apply {
-                putExtra("media", media)
-                putExtra("episodeNumber", media.anime?.selectedEpisode)
-            }
+
+            MediaBridge.setMedia(media)
+
+            val intent = Intent(requireActivity(), PlayerActivity::class.java)
             startActivity(intent)
         } else {
             model.setEpisode(media.anime!!.episodes!![media.anime.selectedEpisode!!]!!, "startPlayer")
@@ -277,7 +279,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             media!!.selected!!.video = bindingAdapterPosition
                             model.saveSelected(media!!.id, media!!.selected!!, requireActivity())
                         }
-                        startExoplayer(media!!)
+                        startMPVPlayer(media!!)
                     }
                 }
                 itemView.setOnLongClickListener {

@@ -227,6 +227,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
     private var aspectRatio = Rational(16, 9)
 
     var settings = PlayerSettings()
+
     private var uiSettings = UserInterfaceSettings()
 
     private val handler = Handler(Looper.getMainLooper())
@@ -1029,6 +1030,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                     false,
                     prev
                 )
+
                 discordRPC.connect()
                 discordRPC.onDurationReady(
                     buildRPCConfig(),
@@ -1213,28 +1215,7 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
         val showProgressDialog =
             if (settings.askIndividual) loadData<Boolean>("${media.id}_progressDialog")
                 ?: true else false
-        if (showProgressDialog && Anilist.userid != null && if (media.isAdult) settings.updateForH else true)
-            AlertDialog.Builder(this, R.style.DialogTheme)
-                .setTitle(getString(R.string.auto_update, media.userPreferredName))
-                .apply {
-                    setOnCancelListener { hideSystemBars() }
-                    setCancelable(false)
-                    setPositiveButton(getString(R.string.yes)) { dialog, _ ->
-                        saveData("${media.id}_progressDialog", false)
-                        saveData("${media.id}_save_progress", true)
-                        dialog.dismiss()
-                        model.setEpisode(episodes[media.anime!!.selectedEpisode!!]!!, "invoke")
-                    }
-                    setNegativeButton(getString(R.string.no)) { dialog, _ ->
-                        saveData("${media.id}_progressDialog", false)
-                        saveData("${media.id}_save_progress", false)
-                        toast(getString(R.string.reset_auto_update))
-                        dialog.dismiss()
-                        model.setEpisode(episodes[media.anime!!.selectedEpisode!!]!!, "invoke")
-                    }
-                    show()
-                }
-        else model.setEpisode(episodes[media.anime!!.selectedEpisode!!]!!, "invoke")
+
 
         if (settings.timeStampsEnabled)
             updateTimeStamp()
@@ -1598,7 +1579,6 @@ class ExoplayerView : AppCompatActivity(), Player.Listener {
                     media.idMAL,
                     media.anime?.selectedEpisode?.trim()?.toIntOrNull(),
                     dur / 1000,
-                    settings.useProxyForTimeStamps
                 )
             }
         }

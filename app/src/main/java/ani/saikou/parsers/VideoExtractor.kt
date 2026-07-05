@@ -16,7 +16,7 @@ abstract class VideoExtractor : Serializable {
     var subtitles: List<Subtitle> = listOf()
 
 
-    // can be removed i did this for locking down
+
     open val  apiKey:String=BuildConfig.MY_CUSTOM_API_KEY
 
 
@@ -169,15 +169,32 @@ data class Video(
 /**
  * The Class which contains the link to a subtitle file of a specific language
  * */
+/**
+ * The Class which contains the link to a subtitle file of a specific language
+ * */
 data class Subtitle(
     val language: String,
     val file: FileUrl,
     val type: SubtitleType = SubtitleType.VTT,
+    val headers: Map<String, String>? = null,
+    val isDefault: Boolean = false // Added default field here
 ) : Serializable {
-    constructor(language: String, url: String, type: SubtitleType = SubtitleType.VTT)
-            : this(language, FileUrl(url), type)
-}
+    constructor(
+        language: String,
+        url: String,
+        type: SubtitleType = SubtitleType.VTT,
+        headers: Map<String, String>? = null,
+        isDefault: Boolean = false
+    ) : this(language, FileUrl(url), type, headers, isDefault)
 
+    // Secondary constructor to maintain backwards compatibility for existing parser modules
+    constructor(
+        language: String,
+        url: String,
+        type: SubtitleType = SubtitleType.VTT,
+        headers: Map<String, String>? = null
+    ) : this(language, FileUrl(url), type, headers, false)
+}
 enum class VideoType {
     CONTAINER, M3U8, DASH
 }

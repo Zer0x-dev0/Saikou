@@ -1,6 +1,7 @@
+
 package ani.saikou.parsers.anime
 
-import ani.saikou.BuildConfig
+
 import ani.saikou.FileUrl
 import ani.saikou.client
 import ani.saikou.parsers.AnimeApiParser
@@ -8,25 +9,30 @@ import ani.saikou.parsers.Episode
 import ani.saikou.parsers.ShowResponse
 import ani.saikou.parsers.VideoExtractor
 import ani.saikou.parsers.VideoServer
-import ani.saikou.parsers.anime.extractors.AniZoneExtractor
+import ani.saikou.parsers.anime.extractors.MegaPlay
 import ani.saikou.tryWithSuspend
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
 
 @OptIn(InternalSerializationApi::class)
-class Anizone : AnimeApiParser() {
+class AniBD : AnimeApiParser() {
 
-    override val name = "Anizone"
-    override val saveName = "Anizone"
-    override val providerName = "anizone"
+    override val name = "AniBD"
+    override val saveName = "AniBD"
+    override val providerName = "anibd"
     override val isDubAvailableSeparately = false
 
+
     override suspend fun search(query: String): List<ShowResponse> {
-        return tryWithSuspend(post = false, snackbar = true) {
+        return tryWithSuspend(post = true, snackbar = true) {
             if (query.isBlank()) return@tryWithSuspend emptyList()
+
             val encoded = URLEncoder.encode(query, "utf-8")
-            val res = client.get("$hostUrl/api/anizone/anime/search?q=$encoded")
+            val res = client.get(
+                "$hostUrl/api/anibd/anime/search?q=$encoded",
+                headers = mapOf("x-api-key" to apiKey)
+            )
                 .parsed<SearchApiResponse>()
 
             res.data.map {
@@ -37,29 +43,29 @@ class Anizone : AnimeApiParser() {
                 )
             }
         } ?: emptyList()
-
     }
 
     override suspend fun loadEpisodes(
         animeLink: String,
         extra: Map<String, String>?
     ): List<Episode> {
-        return tryWithSuspend(post = false, snackbar = true) {
+        return tryWithSuspend(post = true, snackbar = true) {
+
             if (animeLink.isBlank()) return@tryWithSuspend emptyList()
-            val url = "$hostUrl/api/anizone/anime/$animeLink"
+
+            val url = "$hostUrl/api/anibd/anime/$animeLink"
             val res =
                 client.get(url, headers = mapOf("x-api-key" to apiKey)).parsed<EpisodesResponse>()
 
-            res.data.map { ep ->
+            res.providerEpisodes.map { ep ->
                 Episode(
                     number = ep.episodeNumber.toString(),
                     link = ep.episodeId,
-                    title = ep.title ?: "Episode ${ep.episodeNumber}",
-                    thumbnail = ep.thumbnail,
+                    title = "Episode ${ep.episodeNumber}",
                 )
             }
-
         } ?: emptyList()
+
     }
     override suspend fun loadVideoServers(
         episodeLink: String,
@@ -67,11 +73,11 @@ class Anizone : AnimeApiParser() {
     ): List<VideoServer> {
         return tryWithSuspend(post = false, snackbar = true) {
             if (episodeLink.isBlank()) return@tryWithSuspend emptyList()
-            val embedUrl = "$hostUrl/api/anizone/sources/$episodeLink"
+            val embedUrl = "$hostUrl/api/anibd/sources/$episodeLink"
 
             return@tryWithSuspend listOf(
                 VideoServer(
-                    name = "MULTI AUDIO SOURCE",
+                    name = "SUB",
                     embed = FileUrl(embedUrl),
                     extraData = null
                 )
@@ -80,8 +86,10 @@ class Anizone : AnimeApiParser() {
         }  ?: emptyList()
     }
 
+
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {
-        return AniZoneExtractor(server)
+
+        return MegaPlay(server)
     }
 
 
@@ -98,21 +106,38 @@ class Anizone : AnimeApiParser() {
 
     )
 
-
     @Serializable
     private data class EpisodesResponse(
-        val data: List<EpisodeItem>
+        val providerEpisodes: List<EpisodeItem>
     )
 
     @Serializable
     private data class EpisodeItem(
         val episodeId: String,
-        val title: String?,
-        val thumbnail: String,
-        val episodeNumber: Int
+        val title: String,
+        val episodeNumber: Int,
     )
 
+    @Serializable
+    private data class EpisodeServersResponse(
+        val data: EpisodeServers
+    )
 
+    @Serializable
+    private data class ServerItem(
+        val serverName: String,
+        val serverId: String,
+        val mediaId: String,
+        val eid:String
+    )
+
+    @Serializable
+    private data class EpisodeServers(
+        val sub: List<ServerItem> = emptyList(),
+        val dub: List<ServerItem> = emptyList(),
+        val raw: List<ServerItem> = emptyList(),
+        val episodeNumber: Int
+    )
 
 
 }

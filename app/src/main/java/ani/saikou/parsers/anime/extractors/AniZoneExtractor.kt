@@ -2,6 +2,7 @@ package ani.saikou.parsers.anime.extractors
 
 import ani.saikou.FileUrl
 import ani.saikou.client
+import ani.saikou.parsers.Subtitle
 import ani.saikou.parsers.Video
 import ani.saikou.parsers.VideoContainer
 import ani.saikou.parsers.VideoExtractor
@@ -24,15 +25,17 @@ class AniZoneExtractor(override val server: VideoServer) : VideoExtractor() {
     )
 
     @Serializable
-    data class Subtitle(
+
+    data class Subtitles(
         val url: String,
         val lang: String,
+//        val kind:String, fix the api stuff
         val default: Boolean
     )
 
     @Serializable
     data class SourceData(
-        val subtitles: List<Subtitle> = emptyList(),
+        val subtitles: List<Subtitles> = emptyList(),
         val sources: List<SourceItem> = emptyList()
     )
 
@@ -53,11 +56,6 @@ class AniZoneExtractor(override val server: VideoServer) : VideoExtractor() {
             val response = client.get(server.embed.url,headers = mapOf("x-api-key" to apiKey))
                 .parsed<SourceResponse>()
 
-            val videoReferer = response.headers.referer.toString()
-
-
-            val origin = videoReferer.removeSuffix("/")
-
 
             val videos = response.data.sources.map {
                 Video(
@@ -70,14 +68,13 @@ class AniZoneExtractor(override val server: VideoServer) : VideoExtractor() {
 
             val realSubtitles = response.data.subtitles.filter { it.lang != "thumbnails" }
 
-//            disabled lacks support for ASS
-//            val subs = realSubtitles.map { sub ->
-////                Subtitle(
-////                    language = sub.lang,
-////                    url = sub.url,
-////                )
-//            }
-            VideoContainer(videos)
+            val subs = realSubtitles.map { sub ->
+                Subtitle(
+                    language = sub.lang,
+                    url = sub.url
+                )
+            }
+            VideoContainer(videos,subs)
 
         } ?: VideoContainer(emptyList())
 

@@ -13,20 +13,24 @@ import ani.saikou.tryWithSuspend
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
+import kotlin.collections.mapOf
 
 @OptIn(InternalSerializationApi::class)
-class Anizone : AnimeApiParser() {
+class AnimeHeaven : AnimeApiParser() {
 
-    override val name = "Anizone"
-    override val saveName = "Anizone"
-    override val providerName = "anizone"
+    override val name = "AnimeHeaven"
+    override val saveName = "AnimeHeaven"
+    override val providerName = "animeheaven"
     override val isDubAvailableSeparately = false
 
     override suspend fun search(query: String): List<ShowResponse> {
         return tryWithSuspend(post = false, snackbar = true) {
             if (query.isBlank()) return@tryWithSuspend emptyList()
             val encoded = URLEncoder.encode(query, "utf-8")
-            val res = client.get("$hostUrl/api/anizone/anime/search?q=$encoded")
+            val res = client.get(
+                "$hostUrl/api/animeheaven/anime/search?q=$encoded",
+                headers = mapOf("x-api-key" to apiKey)
+            )
                 .parsed<SearchApiResponse>()
 
             res.data.map {
@@ -46,7 +50,7 @@ class Anizone : AnimeApiParser() {
     ): List<Episode> {
         return tryWithSuspend(post = false, snackbar = true) {
             if (animeLink.isBlank()) return@tryWithSuspend emptyList()
-            val url = "$hostUrl/api/anizone/anime/$animeLink"
+            val url = "$hostUrl/api/animeheaven/anime/$animeLink"
             val res =
                 client.get(url, headers = mapOf("x-api-key" to apiKey)).parsed<EpisodesResponse>()
 
@@ -54,30 +58,31 @@ class Anizone : AnimeApiParser() {
                 Episode(
                     number = ep.episodeNumber.toString(),
                     link = ep.episodeId,
-                    title = ep.title ?: "Episode ${ep.episodeNumber}",
-                    thumbnail = ep.thumbnail,
-                )
+                    title = "Episode ${ep.episodeNumber}",
+
+                    )
             }
 
         } ?: emptyList()
     }
+
     override suspend fun loadVideoServers(
         episodeLink: String,
         extra: Map<String, String>?
     ): List<VideoServer> {
         return tryWithSuspend(post = false, snackbar = true) {
             if (episodeLink.isBlank()) return@tryWithSuspend emptyList()
-            val embedUrl = "$hostUrl/api/anizone/sources/$episodeLink"
+            val embedUrl = "$hostUrl/api/animeheaven/sources/$episodeLink"
 
             return@tryWithSuspend listOf(
                 VideoServer(
-                    name = "MULTI AUDIO SOURCE",
+                    name = "SUB-MP4",
                     embed = FileUrl(embedUrl),
                     extraData = null
                 )
             )
 
-        }  ?: emptyList()
+        } ?: emptyList()
     }
 
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {
@@ -107,12 +112,8 @@ class Anizone : AnimeApiParser() {
     @Serializable
     private data class EpisodeItem(
         val episodeId: String,
-        val title: String?,
-        val thumbnail: String,
         val episodeNumber: Int
     )
-
-
 
 
 }

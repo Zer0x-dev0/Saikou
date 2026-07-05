@@ -90,15 +90,16 @@
 <!--            android:launchMode="singleTask"-->
 <!--            android:supportsPictureInPicture="true"-->
 <!--            tools:targetApi="n" />-->
+
+
         <activity
-            android:name="ani.saikou.media.anime.mpv.PlayerActivity"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:label="@string/video"
-            android:launchMode="singleTask"
-            android:supportsPictureInPicture="true"
-            tools:targetApi="n" />
+            android:name=".media.anime.mpv.PlayerActivity"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden">
+        </activity>
+        <service
+            android:name=".media.anime.mpv.PlaybackService"
+            android:exported="false" />
         <activity
             android:name="ani.saikou.connections.anilist.Login"
             android:configChanges="orientation|screenSize|layoutDirection"

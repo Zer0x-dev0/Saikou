@@ -1,11 +1,32 @@
 package ani.saikou.media.anime.mpv.ui
 
+import android.util.Log
+import android.view.SurfaceHolder
+import android.view.ViewGroup
+import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -16,78 +37,171 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import ani.saikou.media.anime.mpv.MPVPlayerImpl
-import ani.saikou.media.anime.mpv.Player
-import ani.saikou.media.anime.mpv.PlayerViewModel
+import ani.saikou.media.MediaDetailsViewModel
 
+import ani.saikou.media.anime.mpv.PlayerEpisodeUiState
+import ani.saikou.media.anime.mpv.PlayerScreenActions
+import ani.saikou.media.anime.mpv.PlayerViewModel
+import ani.saikou.media.anime.mpv.ui.components.PlayerControlsLayout
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
-    videoUrl: String,
-    headers: Map<String, String> =emptyMap()
+    episodeUiState: PlayerEpisodeUiState,
+    mediaDetailsModel: MediaDetailsViewModel,
+    actions: PlayerScreenActions
 ) {
+    var isControlsLocked by remember { mutableStateOf(false) }
+    val isDialogShowing by viewModel.isDialogShowing.collectAsState()
+    val context = LocalContext.current
+    val activity = remember(context) { context as? AppCompatActivity }
 
-    var playerCreated by remember { mutableStateOf(false) }
+    val attachedPlayer by viewModel.attachedPlayerView.collectAsState()
 
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .consumeWindowInsets(WindowInsets.navigationBars)
+            .consumeWindowInsets(WindowInsets.statusBars)
+    ) {
+        val playerView = attachedPlayer
+        if (playerView != null) {
+            AndroidView(
+                factory = { _ ->
+                    val TAG = "mpv"
 
-    val playbackState by if (playerCreated) {
-        viewModel.playbackState.collectAsState()
-    } else {
-        remember { mutableStateOf(Player.PlaybackState.IDLE) }
-    }
+                    (playerView.parent as? ViewGroup)?.removeView(playerView)
 
-    val isPlaying by if (playerCreated) {
-        viewModel.isPlaying.collectAsState()
-    } else {
-        remember { mutableStateOf(false) }
-    }
+                    (playerView.tag as? SurfaceHolder.Callback)?.let { previousCallback ->
 
-    Box(modifier = Modifier.fillMaxSize()) {
+                        playerView.holder.removeCallback(previousCallback)
+                    }
 
-        AndroidView(
-            factory = { context ->
-                MPVPlayerImpl(context).also { playerInstance ->
+                    val callback = object : SurfaceHolder.Callback {
+                        override fun surfaceCreated(holder: SurfaceHolder) {
+                            Log.d(
+                                TAG,
+                                "Compose.surfaceCreated — surfaceReady=${playerView.surfaceReady}, isInitialized=${playerView.isInitialized}, activity=${activity != null}"
+                            )
+                            activity?.let { act ->
+                                if (playerView.surfaceReady && playerView.isInitialized) {
+                                    Log.d(
+                                        TAG,
+                                        "Calling viewModel.onSurfaceReady() from Android View"
+                                    )
+                                    viewModel.onSurfaceReady(act, mediaDetailsModel)
+                                } else {
+                                    Log.w(
+                                        TAG,
+                                        "SKIPPED onSurfaceReady — surfaceReady=${playerView.surfaceReady}, isInitialized=${playerView.isInitialized} from Android View"
+                                    )
+                                }
+                            } ?: Log.w(
+                                TAG,
+                                "SKIPPED onSurfaceReady — activity is null from Android View"
+                            )
+                        }
 
-                    viewModel.setPlayerInstance(playerInstance)
-                    playerCreated = true
+                        override fun surfaceChanged(
+                            holder: SurfaceHolder,
+                            format: Int,
+                            width: Int,
+                            height: Int
+                        ) {
+                        }
 
-                    playerInstance.init(playerInstance.holder)
+                        override fun surfaceDestroyed(holder: SurfaceHolder) {}
+                    }
 
+                    playerView.holder.addCallback(callback)
+                    playerView.tag = callback
 
-                    viewModel.loadMedia(videoUrl = videoUrl, headers = headers)
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                    if (playerView.surfaceReady && playerView.isInitialized) {
+                        activity?.let { act ->
 
-        // Loading indicator
-        if (playbackState == Player.PlaybackState.BUFFERING ||
-            playbackState == Player.PlaybackState.IDLE) {
-            CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-                color = Color.White
+                            viewModel.onSurfaceReady(act, mediaDetailsModel)
+                        }
+                    }
+
+                    playerView
+                },
+                update = { _ -> },
+                modifier = Modifier.fillMaxSize()
             )
         }
 
-        /// some states
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp)
-        ) {
-            Text(
-                text = "State: ${playbackState.name}",
-                color = Color.White,
-                fontSize = 12.sp
-            )
-            Text(
-                text = if (isPlaying) "Playing" else "Paused", /// so its just playing while buffering(player state mismatch revisit this)
-                color = Color.White,
-                fontSize = 14.sp
-            )
+
+        if (!isDialogShowing) {
+            AnimatedContent(
+                targetState = isControlsLocked,
+                label = "ControlLockTransition",
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(durationMillis = 350))
+                        .togetherWith(fadeOut(animationSpec = tween(durationMillis = 350)))
+                }
+            ) { targetLockedState ->
+                if (targetLockedState) {
+                    var isUnlockButtonVisible by remember { mutableStateOf(true) }
+
+                    LaunchedEffect(isUnlockButtonVisible) {
+                        if (isUnlockButtonVisible) {
+                            delay(4000)
+                            isUnlockButtonVisible = false
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                isUnlockButtonVisible = !isUnlockButtonVisible
+                            }
+                    ) {
+                        AnimatedVisibility(
+                            visible = isUnlockButtonVisible,
+                            enter = fadeIn(),
+                            exit = fadeOut(),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 24.dp, end = 24.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Black.copy(alpha = 0.5f),
+                                modifier = Modifier.size(56.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { isControlsLocked = false },
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Lock,
+                                        contentDescription = "Toggle Screen Lock",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    PlayerControlsLayout(
+                        viewModel = viewModel,
+                        episodeUi = episodeUiState,
+                        isControlsLocked = isControlsLocked,
+                        onLockChanged = { isControlsLocked = it },
+                        actions = actions,
+                        activity = activity
+                    )
+                }
+            }
         }
     }
 }
