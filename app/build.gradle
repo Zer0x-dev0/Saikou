@@ -15,11 +15,11 @@ def gitCommitHash = providers.exec {
 
 
 android {
-    compileSdk 36
+    compileSdk 35
 
     defaultConfig {
         applicationId "ani.saikou"
-        minSdk 21
+        minSdk 24
         targetSdk 34
         versionCode ((System.currentTimeMillis() / 60000).toInteger())
         versionName "1.2.5"
@@ -44,6 +44,10 @@ android {
     buildFeatures {
         viewBinding true
         buildConfig = true
+        compose  = true
+        composeOptions{
+            kotlinCompilerExtensionVersion = "1.5.15"
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -105,6 +109,52 @@ dependencies {
 
 
     /// mpv lib
-//    implementation("io.github.abdallahmehiz:mpv-android-lib:0.1.12")
+    implementation("io.github.abdallahmehiz:mpv-android-lib:0.1.12")
+
+    // compose
+    def composeBom = platform('androidx.compose:compose-bom:2024.04.01')
+    implementation composeBom
+    androidTestImplementation composeBom
+
+    // Core integration with Activities & Foundation Layouts
+    implementation 'androidx.activity:activity-compose:1.8.2' 
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.runtime:runtime'
+
+    // Design System (Material Design 3)
+    implementation 'androidx.compose.material3:material3'
+
+    // Icons (Core + Full Extended Pack)
+    implementation 'androidx.compose.material:material-icons-core'
+    implementation 'androidx.compose.material:material-icons-extended'
+    /// constraint layout
+    implementation("androidx.constraintlayout:constraintlayout-compose:1.0.1")
+
+    //animation
+    implementation("androidx.compose.animation:animation-graphics")
+
+    // Developer & Tooling Previews
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    // UI Architecture & Test utilities
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
+    debugImplementation 'androidx.compose.ui:ui-test-manifest'
+
+// koin
+    def koin_version = "3.5.6"
+    def koin_compose_version = "3.5.6"
+
+    implementation "io.insert-koin:koin-android:$koin_version"
+    implementation "io.insert-koin:koin-androidx-compose:$koin_compose_version"
+
+    //seeker
+    implementation "com.github.abdallahmehiz:seeker:2.0.1"
+
+/// koylin collections
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.8")
+
 
 }

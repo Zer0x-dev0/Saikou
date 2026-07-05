@@ -20,6 +20,8 @@ import ani.saikou.databinding.ItemStreamBinding
 import ani.saikou.databinding.ItemUrlBinding
 import ani.saikou.media.Media
 import ani.saikou.media.MediaDetailsViewModel
+import ani.saikou.media.anime.mpv.MediaBridge
+import ani.saikou.media.anime.mpv.PlayerActivity
 import ani.saikou.others.Download.download
 import ani.saikou.parsers.VideoExtractor
 import ani.saikou.parsers.VideoType
@@ -86,10 +88,10 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             if (size!=null && size >= media!!.selected!!.video) {
                                 media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedExtractor = selected
                                 media!!.anime!!.episodes?.get(media!!.anime!!.selectedEpisode!!)?.selectedVideo = media!!.selected!!.video
-                                startExoplayer(media!!)
+                                startMPVPlayer(media!!)
                             } else fail()
                         }
-                        
+
                         if (ep.extractors.isNullOrEmpty()) {
                             model.getEpisode().observe(this) {
                                 if (it != null) {
@@ -154,18 +156,37 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
     }
 
     @SuppressLint("UnsafeOptInUsageError")
-    fun startExoplayer(media: Media) {
-        prevEpisode = null
+//    fun startExoplayer(media: Media) {
+//        prevEpisode = null
+//
+//        dismiss()
+//        if (launch!!) {
+//            stopAddingToList()
+//            val intent = Intent(activity, ExoplayerView::class.java)
+//            ExoplayerView.media = media
+//            ExoplayerView.initialized = true
+//
+//
+//            startActivity(intent)
+//        } else {
+//            model.setEpisode(media.anime!!.episodes!![media.anime.selectedEpisode!!]!!, "startExo no launch")
+//        }
+//    }
 
+
+    fun startMPVPlayer(media: Media) {
+        prevEpisode = null
         dismiss()
-        if (launch!!) {
+
+        if (launch == true) {
             stopAddingToList()
-            val intent = Intent(activity, ExoplayerView::class.java)
-            ExoplayerView.media = media
-            ExoplayerView.initialized = true
+
+            MediaBridge.setMedia(media)
+
+            val intent = Intent(requireActivity(), PlayerActivity::class.java)
             startActivity(intent)
         } else {
-            model.setEpisode(media.anime!!.episodes!![media.anime.selectedEpisode!!]!!, "startExo no launch")
+            model.setEpisode(media.anime!!.episodes!![media.anime.selectedEpisode!!]!!, "startPlayer")
         }
     }
 
@@ -258,7 +279,7 @@ class SelectorDialogFragment : BottomSheetDialogFragment() {
                             media!!.selected!!.video = bindingAdapterPosition
                             model.saveSelected(media!!.id, media!!.selected!!, requireActivity())
                         }
-                        startExoplayer(media!!)
+                        startMPVPlayer(media!!)
                     }
                 }
                 itemView.setOnLongClickListener {

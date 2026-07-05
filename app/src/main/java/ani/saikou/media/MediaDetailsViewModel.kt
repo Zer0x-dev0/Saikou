@@ -149,12 +149,12 @@ class MediaDetailsViewModel : ViewModel() {
 
     val timeStamps = MutableLiveData<List<AniSkip.Stamp>?>()
     private val timeStampsMap: MutableMap<Int, List<AniSkip.Stamp>?> = mutableMapOf()
-    suspend fun loadTimeStamps(malId: Int?, episodeNum: Int?, duration: Long, useProxyForTimeStamps: Boolean) {
+    suspend fun loadTimeStamps(malId: Int?, episodeNum: Int?, duration: Long, ) {
         malId ?: return
         episodeNum ?: return
         if (timeStampsMap.containsKey(episodeNum))
             return timeStamps.postValue(timeStampsMap[episodeNum])
-        val result = AniSkip.getResult(malId, episodeNum, duration, useProxyForTimeStamps)
+        val result = AniSkip.getResult(malId, episodeNum, duration, )
         timeStampsMap[episodeNum] = result
         timeStamps.postValue(result)
     }
@@ -266,5 +266,4 @@ class MediaDetailsViewModel : ViewModel() {
             book.postValue(novelSources[i].loadBook(novel.link, novel.extra))
         }
     }
-
 }
