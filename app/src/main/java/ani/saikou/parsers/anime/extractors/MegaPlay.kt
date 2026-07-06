@@ -30,7 +30,7 @@ class MegaPlay(override val server: VideoServer) : VideoExtractor() {
         val url: String,
         val lang: String,
 //        val kind:String, fix the api stuff
-        val default: Boolean=false
+        val default: Boolean = false
 
     )
 
@@ -54,7 +54,7 @@ class MegaPlay(override val server: VideoServer) : VideoExtractor() {
 
     override suspend fun extract(): VideoContainer {
         try {
-            val response = client.get(server.embed.url)
+            val response = client.get(server.embed.url, headers = mapOf("x-api-key" to apiKey))
                 .parsed<SourceResponse>()
 
             val videoReferer = response.headers.referer
@@ -95,7 +95,7 @@ class MegaPlay(override val server: VideoServer) : VideoExtractor() {
                     urlString.endsWith(".vtt") -> SubtitleType.VTT
                     urlString.endsWith(".ass") -> SubtitleType.ASS
                     urlString.endsWith(".srt") -> SubtitleType.SRT
-                    else ->  SubtitleType.VTT
+                    else -> SubtitleType.VTT
                 }
 
                 Subtitle(
