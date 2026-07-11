@@ -1,6 +1,5 @@
 package ani.saikou.parsers.manga
 
-import android.util.Log
 import ani.saikou.FileUrl
 import ani.saikou.Mapper.json
 import ani.saikou.client
@@ -15,8 +14,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 
 @OptIn(InternalSerializationApi::class)

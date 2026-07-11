@@ -13,7 +13,7 @@ object MangaSources : MangaReadSources() {
         "MangaHub" to ::MangaHub,
         "MangaRead" to ::MangaRead,
         "MangaPill" to ::MangaPill,
-        "MangaDex" to ::MangaDex,
+//        "MangaDex" to ::MangaDex,
 //        "Toonily" to ::Toonily,  //stubborn ass provider returning wrong results idk why
 //        "MangaKatana" to ::MangaKatana,  // host url isnot resolving
     )
