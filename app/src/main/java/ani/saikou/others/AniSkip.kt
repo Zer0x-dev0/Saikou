@@ -13,17 +13,11 @@ object AniSkip {
     suspend fun getResult(malId: Int, episodeNumber: Int, episodeLength: Long): List<Stamp>? {
         val url =
             "https://api.aniskip.com/v2/skip-times/$malId/$episodeNumber?types[]=ed&types[]=mixed-ed&types[]=mixed-op&types[]=op&types[]=recap&episodeLength=$episodeLength"
-        val TAG = "mpv"
+
         return tryWithSuspend {
             val response = client.get(url)
 
-
-            Log.d(TAG, "Response Code: ${response.code}")
-
             val res = response.parsed<AniSkipResponse>()
-
-
-            Log.d(TAG, "Response Data: $res")
 
             if (res.found) res.results else null
         }

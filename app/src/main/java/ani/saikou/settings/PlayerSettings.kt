@@ -24,7 +24,7 @@ data class PlayerSettings(
     var timeStampsEnabled: Boolean = true,
     var useProxyForTimeStamps: Boolean = true, // can be nuked
     var showTimeStampButton: Boolean = true,
-    var useAlternativeTimestampProvider: Boolean = false,
+    var useAlternativeTimestampProvider: Boolean = true,
 
     //Auto
     var autoSkipOPED: Boolean = false,
@@ -39,7 +39,8 @@ data class PlayerSettings(
     //Behaviour
     var alwaysContinue: Boolean = true,
     var focusPause: Boolean = true,
-    var gestures: Boolean = true,
+    var gestures: Boolean = true,  // nuke
+    var verticalSwipe: Boolean = true,
     var doubleTap: Boolean = true, //nuke this
     var fastforward: Boolean = true, // nuke this
     var seekTime: Int = 10,

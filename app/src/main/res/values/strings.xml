@@ -251,8 +251,8 @@
     <string name="always_continue">Always Continue from where you left off</string>
     <string name="pause_video_focus">Pause when not in Focus</string>
 <!--    <string name="gestures">Volume &amp; Brightness Gestures</string>-->
-    <string name="gestures">Enable Player Gestures</string>
-<!--    <string name="double_tap">Double tap to Seek</string>-->
+    <string name="gestures_vertical">Vertical Swipe Gestures</string>
+    <string name="double_tap">Double tap to Seek</string>
 <!--    <string name="double_tap_info">Turning off will show fast forward &amp; rewind buttons</string>-->
 <!--    <string name="fast_forward">Fast Forward</string>-->
     <string name="seek_time">Seek Time</string>

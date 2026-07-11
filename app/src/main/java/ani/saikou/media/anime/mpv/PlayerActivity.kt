@@ -37,7 +37,6 @@ class PlayerActivity : AppCompatActivity() {
 
     private var isExiting = false
 
-
     private var resumeOnFocusGain = false
 
     override fun finish() {
@@ -111,19 +110,19 @@ class PlayerActivity : AppCompatActivity() {
                 combine(
                     playerModel.playbackState,
                     playerModel.duration,
-                    playerModel.currentPosition
-                ) { state, duration, position ->
-                    Triple(state, duration, position)
-                }.collect { (state, duration, currentPosition) ->
+                    playerModel.currentPosition,
+                    playerModel.uiState
+                ) { state, duration, position, uiState ->
+                    TrackEpisode(state, duration, position, uiState.hasNextEpisode)
+                }.collect { (state, duration, currentPosition, hasNextEpisode) ->
+                    val remainingTime = if (duration > 0L) duration - currentPosition else -1L
+                    val isAtTrackEnd = (state == PlaybackState.ENDED) && (remainingTime in 0L..1000L)
 
-                    if (state == PlaybackState.ENDED) {
-                        val remainingTime = if (duration > 0L) duration - currentPosition else -1L
-
-                        if (remainingTime in 0L..2000L && playerModel.settings.autoPlay) {
-                            playerModel.handleNextEpisodeClick(
-                                this@PlayerActivity,
-                                mediaDetailsModel
-                            )
+                    if (isAtTrackEnd) {
+                        if (playerModel.settings.autoPlay && hasNextEpisode) {
+                            playerModel.handleNextEpisodeClick(this@PlayerActivity, mediaDetailsModel)
+                        } else {
+                            playerModel.pause()
                         }
                     }
                 }
@@ -172,6 +171,7 @@ class PlayerActivity : AppCompatActivity() {
                     playerModel.setVolume((currentVol + 5).coerceIn(0, 100))
                     return true
                 }
+
                 KeyEvent.KEYCODE_VOLUME_DOWN -> {
                     val currentVol = playerModel.volume.value
                     playerModel.setVolume((currentVol - 5).coerceIn(0, 100))
@@ -181,6 +181,12 @@ class PlayerActivity : AppCompatActivity() {
         }
         return super.dispatchKeyEvent(event)
     }
+
+    override fun onStart() {
+        super.onStart()
+        playerModel.setMediaSessionActive(true)
+    }
+
 
     override fun onPause() {
         super.onPause()
@@ -193,12 +199,18 @@ class PlayerActivity : AppCompatActivity() {
         playerModel.play()
     }
 
+    override fun onStop() {
+        super.onStop()
+        playerModel.setMediaSessionActive(false)
+    }
+
     override fun onDestroy() {
         MediaBridge.clear()
 
         if (isExiting) {
             playerModel.exitPlayback()
             playerModel.releasePlayer(mediaDetailsModel)
+            playerModel.setMediaSessionActive(false)
         }
         playerModel.destroyViewModel(mediaDetailsModel)
         playerModel.unbindService(this)
@@ -208,6 +220,7 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        playerModel.setMediaSessionActive(hasFocus)
 
         if (playerModel.settings.focusPause) {
             if (!hasFocus) {
@@ -241,3 +254,10 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 }
+
+data class TrackEpisode(
+    val state: PlaybackState,
+    val duration: Long,
+    val position: Long,
+    val hasNextEpisode: Boolean
+)

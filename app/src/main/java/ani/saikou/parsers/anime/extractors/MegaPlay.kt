@@ -29,7 +29,6 @@ class MegaPlay(override val server: VideoServer) : VideoExtractor() {
     data class Subtitle(
         val url: String,
         val lang: String,
-//        val kind:String, fix the api stuff
         val default: Boolean = false
 
     )
@@ -71,11 +70,7 @@ class MegaPlay(override val server: VideoServer) : VideoExtractor() {
                 "Accept-Language" to "en-US,en;q=0.5",
                 "Accept-Encoding" to "gzip, deflate, br, zstd",
                 "Origin" to origin,
-                " Pragma" to "no-cache",
                 "Referer" to videoReferer,
-                "Connection" to "keep-alive",
-                "Pragma" to "no-cache",
-                "Cache-Control" to "no-cache"
             )
             val videos = response.data.sources.map {
                 Video(

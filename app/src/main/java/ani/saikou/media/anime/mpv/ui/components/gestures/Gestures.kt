@@ -18,7 +18,8 @@ import kotlin.math.abs
 @Composable
 fun PlayerGestures(
     isControlsLocked: Boolean,
-    isGesturesEnabled: Boolean,
+    isDoubleTapEnabled: Boolean,
+    isVerticalSwipeEnabled: Boolean,
     onSingleTap: () -> Unit,
     onDoubleTapLeft: () -> Unit,
     onDoubleTapRight: () -> Unit,
@@ -42,22 +43,24 @@ fun PlayerGestures(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(isControlsLocked || !isGesturesEnabled) {
-                if (isControlsLocked || !isGesturesEnabled) return@pointerInput
+            .pointerInput(isControlsLocked) {
+                if (isControlsLocked) return@pointerInput
                 detectTapGestures(
                     onTap = { currentSingleTap() },
                     onDoubleTap = { offset ->
-                        if (offset.x < size.width / 2f) {
-                            currentDoubleTapLeft()
-                        } else {
-                            currentDoubleTapRight()
+                        if (isDoubleTapEnabled) {
+                            if (offset.x < size.width / 2f) {
+                                currentDoubleTapLeft()
+                            } else {
+                                currentDoubleTapRight()
+                            }
                         }
                     }
                 )
             }
 
-            .pointerInput(isControlsLocked || !isGesturesEnabled) {
-                if (isControlsLocked || !isGesturesEnabled) return@pointerInput
+            .pointerInput(isControlsLocked) {
+                if (isControlsLocked) return@pointerInput
 
                 val dragSlopPx = 30.dp.toPx()
                 val longPressTimeout = viewConfiguration.longPressTimeoutMillis - 100L
@@ -96,9 +99,11 @@ fun PlayerGestures(
                                     totalAccumulatedX
                                 )
                             ) {
-                                dragStarted = true
-                                if (isLeftSide) currentBrightnessStart() else currentVolumeStart()
-                                break
+                                if (isVerticalSwipeEnabled) {
+                                    dragStarted = true
+                                    if (isLeftSide) currentBrightnessStart() else currentVolumeStart()
+                                    break
+                                }
                             }
                         }
                         dragStarted
@@ -108,7 +113,7 @@ fun PlayerGestures(
                         currentSpeedChanged(2.0f)
                     }
 
-                    if (gestureResult == false) return@awaitEachGesture
+                    if (gestureResult == false && !isSpeedBoosted) return@awaitEachGesture
 
 
                     while (true) {
@@ -125,7 +130,7 @@ fun PlayerGestures(
 
                         val dragAmount = change.positionChange()
 
-                        if (dragStarted && !isSpeedBoosted) {
+                        if (dragStarted && !isSpeedBoosted && isVerticalSwipeEnabled) {
                             if (abs(dragAmount.x) <= abs(dragAmount.y)) {
                                 change.consume()
                                 val deltaFraction =

@@ -33,7 +33,7 @@ class AniDBExtractor(
             val response = client
                 .get(server.embed.url)
 
-            Log.d("anidb", "Response${response.code}")
+
             val html = response.document
             val sources = parseSources(html)
 

@@ -8,7 +8,6 @@ import kotlinx.serialization.Serializable
 
 class PlayerRepository {
 
-    private val tag = "mpv"
 
     /**
      * Fetches opening, ending, recap and mixed skip segments from the alternative
@@ -47,24 +46,37 @@ class PlayerRepository {
 
         return tryWithSuspend {
             val response = client.get(url)
-            Log.d(tag, "AniSkip response code: ${response.code}")
+
 
             val res = response.parsed<AniSkipResponse>()
-            Log.d(tag, "AniSkip response data: $res")
+
 
             if (res.found) res.results?.let { mapAniSkipToUnified(it) } else null
         }
     }
 
     private fun mapWorkersToUnified(res: SkipTimeResponse): List<SkipInterval> {
-        val list = mutableListOf<SkipInterval>()
+        return buildList {
+            fun addSegments(type: String, segments: List<SkipSegment>) {
+                segments.forEach {
+                    add(
+                        SkipInterval(
+                            startTimeMs = it.startMs,
+                            endTimeMs = it.endMs,
+                            type = type,
+                            durationMs = it.durationMs,
+                            startsAtBeginning = it.startsAtBeginning,
+                            endsAtMediaEnd = it.endsAtMediaEnd
+                        )
+                    )
+                }
+            }
 
-        res.intro.forEach { list.add(SkipInterval(it.startMs, it.endMs ?: 0, "Opening")) }
-        res.recap.forEach { list.add(SkipInterval(it.startMs, it.endMs ?: 0, "Recap")) }
-        res.credits.forEach { list.add(SkipInterval(it.startMs, it.endMs ?: 0, "Ending")) }
-        res.preview.forEach { list.add(SkipInterval(it.startMs, it.endMs ?: 0, "Preview")) }
-
-        return list
+            addSegments("Opening", res.intro)
+            addSegments("Recap", res.recap)
+            addSegments("Ending", res.credits)
+            addSegments("Preview", res.preview)
+        }
     }
 
     private fun mapAniSkipToUnified(stamps: List<AniSkipStamp>): List<SkipInterval> {
@@ -92,12 +104,12 @@ class PlayerRepository {
     data class SkipTimeResponse(
         val tmdbId: Int,
         val type: String,
-        val season: Int,
-        val episode: Int,
-        val intro: List<SkipSegment>,
-        val recap: List<SkipSegment>,
-        val credits: List<SkipSegment>,
-        val preview: List<SkipSegment>
+        val season: Int? = null,
+        val episode: Int? = null,
+        val intro: List<SkipSegment> = emptyList(),
+        val recap: List<SkipSegment> = emptyList(),
+        val credits: List<SkipSegment> = emptyList(),
+        val preview: List<SkipSegment> = emptyList()
     )
 
     @Serializable
@@ -139,7 +151,11 @@ class PlayerRepository {
 
     data class SkipInterval(
         val startTimeMs: Long,
-        val endTimeMs: Long,
-        val type: String
+        val endTimeMs: Long?,
+        val type: String,
+
+        val durationMs: Long? = null,
+        val startsAtBeginning: Boolean? = null,
+        val endsAtMediaEnd: Boolean? = null
     )
 }

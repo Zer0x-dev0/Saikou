@@ -118,7 +118,7 @@ class PlayerSettingsActivity : AppCompatActivity() {
             saveData(player, settings)
         }
 
-        binding.playerSettingsTimeStampsProvider.isChecked = settings.useProxyForTimeStamps
+        binding.playerSettingsTimeStampsProvider.isChecked = settings.useAlternativeTimestampProvider
         binding.playerSettingsTimeStampsProvider.setOnCheckedChangeListener { _, isChecked ->
             settings.useAlternativeTimestampProvider = isChecked
             saveData(player, settings)
@@ -180,17 +180,17 @@ class PlayerSettingsActivity : AppCompatActivity() {
             saveData(player, settings)
         }
 
-        binding.playerSettingsPlayerGestures.isChecked = settings.gestures
-        binding.playerSettingsPlayerGestures.setOnCheckedChangeListener { _, isChecked ->
-            settings.gestures = isChecked
+        binding.playerSettingsPlayerVerticalSwipeGestures.isChecked = settings.verticalSwipe
+        binding.playerSettingsPlayerVerticalSwipeGestures.setOnCheckedChangeListener { _, isChecked ->
+            settings.verticalSwipe = isChecked
             saveData(player, settings)
         }
 
-//        binding.playerSettingsDoubleTap.isChecked = settings.doubleTap
-//        binding.playerSettingsDoubleTap.setOnCheckedChangeListener { _, isChecked ->
-//            settings.doubleTap = isChecked
-//            saveData(player, settings)
-//        }
+        binding.playerSettingsDoubleTapGestures.isChecked = settings.doubleTap
+        binding.playerSettingsDoubleTapGestures.setOnCheckedChangeListener { _, isChecked ->
+            settings.doubleTap = isChecked
+            saveData(player, settings)
+        }
 
 //        binding.playerSettingsFastForward.isChecked = settings.fastforward
 //        binding.playerSettingsFastForward.setOnCheckedChangeListener { _, isChecked ->

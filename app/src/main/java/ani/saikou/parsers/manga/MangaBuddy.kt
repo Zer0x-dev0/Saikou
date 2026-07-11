@@ -20,7 +20,7 @@ import java.nio.charset.StandardCharsets
 
 
 @OptIn(InternalSerializationApi::class)
-class MangaBuddy : MangaParser() {
+class MangaK : MangaParser() {
 
     override val name = "MangaBuddy"
     override val saveName = "manga_buddy"

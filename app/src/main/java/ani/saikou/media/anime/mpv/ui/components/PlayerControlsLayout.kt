@@ -17,9 +17,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeDown
+import androidx.compose.material.icons.automirrored.rounded.VolumeMute
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,6 +43,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -60,6 +67,7 @@ import ani.saikou.media.anime.mpv.ui.components.sheets.SubtitlesTracksSheet
 import ani.saikou.media.anime.mpv.ui.components.sheets.VideoTracksSheet
 import ani.saikou.others.AniSkip.getType
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -105,7 +113,11 @@ fun PlayerControlsLayout(
     var manualSkipOffsetMs by remember { mutableLongStateOf(0L) }
     var is2xActive by remember { mutableStateOf(false) }
     var sliderDismissToken by remember { mutableLongStateOf(0L) }
-    var isFirstVolumeCollect by remember { mutableStateOf(true) }
+
+
+    val density = LocalDensity.current
+    var topControlsHeight by remember { mutableStateOf(0.dp) }
+    var bottomControlsHeight by remember { mutableStateOf(0.dp) }
 
 
     val isBuffering = playbackState == PlaybackState.BUFFERING
@@ -117,8 +129,9 @@ fun PlayerControlsLayout(
     var brightnessSliderValue by remember {
         val initialBrightness = activity?.window?.attributes?.screenBrightness ?: 0.5f
         val validBrightness = if (initialBrightness < 0f) 0.5f else initialBrightness
-        mutableFloatStateOf(validBrightness * 10f)
+        mutableFloatStateOf(validBrightness)
     }
+
 
     val triggerCompoundingSeek: (SeekDirection) -> Unit = remember(activeSeekDirection) {
         { direction ->
@@ -180,15 +193,12 @@ fun PlayerControlsLayout(
         }
     }
 
-    LaunchedEffect(volume) {
-        if (isFirstVolumeCollect) {
-            isFirstVolumeCollect = false
-            return@LaunchedEffect
+
+    LaunchedEffect(Unit) {
+        viewModel.volumeChangeEvent.collect {
+            showVolumeSlider = true
+            sliderDismissToken = System.currentTimeMillis()
         }
-
-        showVolumeSlider = true
-
-        sliderDismissToken = System.currentTimeMillis()
     }
     LaunchedEffect(sliderDismissToken) {
         if (sliderDismissToken > 0L) {
@@ -227,7 +237,8 @@ fun PlayerControlsLayout(
         derivedStateOf {
             val currentPosMs = currentEnginePos
             aniSkipStamps.find { stamp ->
-                currentPosMs >= stamp.startTimeMs && currentPosMs < stamp.endTimeMs
+                currentPosMs >= stamp.startTimeMs &&
+                        (stamp.endTimeMs == null || currentPosMs < stamp.endTimeMs)
             }
         }
     }
@@ -238,7 +249,7 @@ fun PlayerControlsLayout(
 
         if (viewModel.settings.autoSkipOPED && isSkippableType) {
             val currentMs = viewModel.currentPosition.value
-            val targetMs = stamp.endTimeMs
+            val targetMs = stamp.endTimeMs ?: durationMs  /// durationMs is the entire file duration
 
             manualSkipOffsetMs = targetMs - currentMs
             viewModel.seekTo(targetMs)
@@ -272,7 +283,8 @@ fun PlayerControlsLayout(
         PlayerGestures(
             isControlsLocked = isControlsLocked,
             onSingleTap = { isControlsVisible = !isControlsVisible },
-            isGesturesEnabled = viewModel.settings.gestures,
+            isDoubleTapEnabled = viewModel.settings.doubleTap,
+            isVerticalSwipeEnabled = viewModel.settings.verticalSwipe,
             onDoubleTapLeft = { triggerCompoundingSeek(SeekDirection.LEFT) },
             onDoubleTapRight = { triggerCompoundingSeek(SeekDirection.RIGHT) },
             onBrightnessGestureStart = {
@@ -284,26 +296,26 @@ fun PlayerControlsLayout(
                 sliderDismissToken = System.currentTimeMillis()
                 activity?.window?.let { window ->
                     val attributes = window.attributes
+
                     val currentBrightness =
                         if (attributes.screenBrightness < 0) 0.5f else attributes.screenBrightness
                     val finalBrightness = (currentBrightness + deltaFraction).coerceIn(0.01f, 1.0f)
-
                     attributes.screenBrightness = finalBrightness
                     window.attributes = attributes
-                    brightnessSliderValue = finalBrightness * 10f
+                    brightnessSliderValue = finalBrightness
                 }
             },
             onVolumeGestureStart = {
                 showVolumeSlider = true
                 sliderDismissToken = System.currentTimeMillis()
             },
-            onVolumeChanged = { deltaFraction ->
+            onVolumeChanged = {deltaFraction ->
                 showVolumeSlider = true
                 sliderDismissToken = System.currentTimeMillis()
-                val delta = deltaFraction * 10f
-                val currentSliderEquivalent = volume.toFloat() / 10f
-                val newSliderValue = (currentSliderEquivalent + delta).coerceIn(0f, 10f)
-                viewModel.setVolume((newSliderValue * 10f).toInt())
+
+                val currentVolumeFraction = volume.toFloat() / 100f
+                val newVolumeFraction = (currentVolumeFraction + deltaFraction).coerceIn(0.0f, 1.0f)
+                viewModel.setVolume((newVolumeFraction * 100f).toInt())
             },
             onSpeedChanged = { targetSpeed ->
                 viewModel.setPlaybackSpeed(targetSpeed)
@@ -342,7 +354,11 @@ fun PlayerControlsLayout(
             visible = isControlsVisible && !isControlsLocked && !is2xActive,
             enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-            modifier = Modifier.align(Alignment.TopCenter)
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .onGloballyPositioned { coordinates ->
+                    topControlsHeight = with(density) { coordinates.size.height.toDp() }
+                }
         ) {
 
             TopControls(
@@ -388,14 +404,19 @@ fun PlayerControlsLayout(
             visible = !is2xActive,
             enter = fadeIn() + slideInVertically(initialOffsetY = { it }),
             exit = fadeOut() + slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.align(Alignment.BottomCenter)
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .onGloballyPositioned { coordinates ->
+                    bottomControlsHeight = with(density) { coordinates.size.height.toDp() }
+                }
         ) {
             val currentStamp = activeAniSkipStamp
             val hasActiveStamp = currentStamp != null
 
             val skipLabelDuration = remember(currentStamp, currentEnginePos) {
                 if (currentStamp != null) {
-                    ((currentStamp.endTimeMs - (currentEnginePos))).toInt().coerceAtLeast(0)
+                    val endMs = currentStamp.endTimeMs ?: durationMs
+                    (endMs - currentEnginePos).toInt().coerceAtLeast(0)
                 } else {
                     null
                 }
@@ -422,7 +443,7 @@ fun PlayerControlsLayout(
                     val skipDurationMs = viewModel.settings.skipTime.toLong() * 1000L
 
                     val targetMs = if (hasActiveStamp) {
-                        (currentStamp!!.endTimeMs)
+                        currentStamp!!.endTimeMs ?: durationMs
                     } else {
                         (currentMs + skipDurationMs).coerceAtMost(durationMs)
                     }
@@ -452,47 +473,72 @@ fun PlayerControlsLayout(
             )
         }
 
+        val configuration = LocalConfiguration.current
+        val edgeInset = (configuration.screenWidthDp.dp * 0.07f).coerceIn(20.dp, 64.dp)
 
-        AnimatedVisibility(
-            visible = showVolumeSlider,
-            enter = fadeIn(),
-            exit = fadeOut(),
+        Box(
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 56.dp, bottom = 20.dp)
+                .fillMaxSize()
+                .padding(top = topControlsHeight, bottom = bottomControlsHeight)
         ) {
-            val currentVolumeFraction = remember(volume) { volume.toFloat() / 10f }
-            VerticalSlider(
-                value = currentVolumeFraction,
-                icon = Icons.AutoMirrored.Rounded.VolumeUp,
-                onValueChange = { newValue ->
-                    sliderDismissToken = System.currentTimeMillis()
-                    viewModel.setVolume((newValue * 10f).toInt())
-                }
-            )
-        }
+            AnimatedVisibility(
+                visible = showVolumeSlider,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = edgeInset)
+            ) {
 
-        AnimatedVisibility(
-            visible = showBrightnessSlider,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 56.dp, bottom = 20.dp)
-        ) {
-            VerticalSlider(
-                value = brightnessSliderValue,
-                icon = Icons.Rounded.LightMode,
-                onValueChange = { newValue ->
-                    sliderDismissToken = System.currentTimeMillis()
-                    brightnessSliderValue = newValue
-                    activity?.window?.let { window ->
-                        val attrs = window.attributes
-                        attrs.screenBrightness = (newValue / 10f).coerceIn(0.01f, 1.0f)
-                        window.attributes = attrs
+                val currentVolumeFraction = remember(volume) { volume.toFloat() / 100f }
+
+                VerticalSlider(
+                    value = currentVolumeFraction,
+                    onValueChange = { newFraction ->
+                        val newVolume = (newFraction * 100f).roundToInt()
+                        viewModel.setVolume(newVolume)
+                    },
+                    iconProvider = { currentVal ->
+                        when {
+                            currentVal <= 0f -> Icons.AutoMirrored.Rounded.VolumeOff
+                            currentVal < 0.25f -> Icons.AutoMirrored.Rounded.VolumeMute
+                            currentVal < 0.55f -> Icons.AutoMirrored.Rounded.VolumeDown
+                            else -> Icons.AutoMirrored.Rounded.VolumeUp
+                        }
                     }
-                }
-            )
+                )
+            }
+
+            AnimatedVisibility(
+                visible = showBrightnessSlider,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = edgeInset)
+            ) {
+
+                VerticalSlider(
+                    value = brightnessSliderValue,
+                    onValueChange = { newValue ->
+                        sliderDismissToken = System.currentTimeMillis()
+                        brightnessSliderValue = newValue
+                        activity?.window?.let { window ->
+                            val attrs = window.attributes
+                            attrs.screenBrightness = newValue.coerceIn(0f, 1.0f)
+                            window.attributes = attrs
+                        }
+                    },
+                    iconProvider = { currentVal ->
+                        when {
+                            currentVal < 0.3f -> Icons.Rounded.LightMode
+                            currentVal < 0.7f -> Icons.Rounded.LightMode
+                            else -> Icons.Rounded.WbSunny
+                        }
+                    }
+
+                )
+            }
         }
 
         if (areYouReadyToRumble) {

@@ -442,7 +442,7 @@ class WebSocketRPC(private val context: Context) {
             metadata = Metadata(
                 buttonUrls = listOf(
                     config.shareLink ?: "https://anilist.co/",
-                    "https://github.com/middlegear/Saikou"
+                    "https://github.com/saikou-app"
                 )
             )
         )

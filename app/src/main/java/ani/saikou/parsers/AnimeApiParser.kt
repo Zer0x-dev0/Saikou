@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 @OptIn(InternalSerializationApi::class)
 abstract class AnimeApiParser : AnimeParser() {
 
-    override val hostUrl: String = BuildConfig.SERVER_URL
+    override val hostUrl: String = "https://kenjitsu-private-api-saikou.vercel.app"
 
     open val apiKey: String = BuildConfig.MY_CUSTOM_API_KEY
     abstract val providerName: String
@@ -33,7 +33,7 @@ abstract class AnimeApiParser : AnimeParser() {
             setUserText("Searching: ${mediaObj.name ?: mediaObj.userPreferredName ?: mediaObj.nameRomaji}")
 
             val url = "$hostUrl/api/anilist/episodes/$anilistId?provider=$providerName"
-            val res = client.get(url, headers = mapOf("x-api-key" to apiKey), timeout = 10L)
+            val res = client.get(url, headers = mapOf("x-api-key" to apiKey), timeout = 15L)
                 .parsed<ApiResponse>()
 
             val mappedEpisodes = res.providerEpisodes.map { ep ->

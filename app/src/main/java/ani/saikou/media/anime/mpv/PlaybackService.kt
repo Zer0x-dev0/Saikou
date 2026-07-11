@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 class PlaybackService : Service() {
 
@@ -48,6 +49,9 @@ class PlaybackService : Service() {
 
     private var resumeOnFocusGain = false
 
+
+    private var preDuckVolumeLevel: Int? = null
+
     private val audioFocusListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
             AudioManager.AUDIOFOCUS_LOSS -> {
@@ -55,19 +59,35 @@ class PlaybackService : Service() {
                 Log.d(TAG, "AUDIOFOCUS_LOSS ")
                 hasAudioFocus = false
                 resumeOnFocusGain = false
+                preDuckVolumeLevel = null
                 player.pause()
                 publishState(PlaybackStateCompat.STATE_PAUSED)
             }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 Log.d(TAG, "AUDIOFOCUS_LOSS_TRANSIENT ")
                 resumeOnFocusGain = player.isPlaying.value
                 player.pause()
                 publishState(PlaybackStateCompat.STATE_PAUSED)
             }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                Log.d(TAG, "AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK — ducking to half volume")
+
+                if (preDuckVolumeLevel == null) {
+                    preDuckVolumeLevel = currentVolumeLevel()
+                }
+                val duckedLevel = ((preDuckVolumeLevel ?: 100) / 2).coerceIn(0, 100)
+                applyVolume(duckedLevel)
+
+            }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 Log.d(TAG, "AUDIOFOCUS_GAIN")
                 hasAudioFocus = true
+
+                preDuckVolumeLevel?.let { originalLevel ->
+                    applyVolume(originalLevel)
+                    preDuckVolumeLevel = null
+                }
+
                 if (resumeOnFocusGain) {
                     resumeOnFocusGain = false
                     player.play()
@@ -76,16 +96,29 @@ class PlaybackService : Service() {
             }
         }
     }
-    fun setSystemVolume(level: Int) {
 
+
+    private fun currentVolumeLevel(): Int {
         val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val targetVolume = (level.coerceIn(0, 100) * maxVolume) / 100
+        if (maxVolume <= 0) return 100
+        val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+        return ((currentVolume.toFloat() / maxVolume.toFloat()) * 100f).roundToInt().coerceIn(0, 100)
+    }
+
+
+    private fun applyVolume(level: Int) {
+        setSystemVolume(level)
+        player.setVolume(level)
+    }
+
+    fun setSystemVolume(level: Int) {
+        val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val targetVolume = ((level.coerceIn(0, 100).toFloat() / 100f) * maxVolume).roundToInt()
 
         audioManager.setStreamVolume(
             AudioManager.STREAM_MUSIC,
             targetVolume,
             0
-//            AudioManager.FLAG_SHOW_UI // disable system volume ui
         )
     }
     private fun requestAudioFocus(): Boolean {
@@ -100,7 +133,7 @@ class PlaybackService : Service() {
             val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(attributes)
                 .setOnAudioFocusChangeListener(audioFocusListener)
-                .setWillPauseWhenDucked(true)
+                .setWillPauseWhenDucked(false)
                 .build()
 
             focusRequest = request
@@ -129,6 +162,7 @@ class PlaybackService : Service() {
         }
         hasAudioFocus = false
         resumeOnFocusGain = false
+        preDuckVolumeLevel = null
         focusRequest = null
     }
 
@@ -176,17 +210,43 @@ class PlaybackService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     private val sessionCallback = object : MediaSessionCompat.Callback() {
-        override fun onPlay() { player.play(); publishState(PlaybackStateCompat.STATE_PLAYING) }
-        override fun onPause() { player.pause(); publishState(PlaybackStateCompat.STATE_PAUSED) }
-        override fun onSeekTo(pos: Long) { player.seekTo(pos) }
-        override fun onSkipToNext() { /* forward to a lambda you set from PlayerViewModel */ onNext?.invoke() }
-        override fun onSkipToPrevious() { onPrev?.invoke() }
+        override fun onPlay() {
+            if (!mediaSession.isActive) {
+                Log.d(TAG, "Ignoring onPlay: session inactive")
+                return
+            }
+            player.play(); publishState(PlaybackStateCompat.STATE_PLAYING)
+        }
+        override fun onPause() {
+            if (!mediaSession.isActive) {
+                Log.d(TAG, "Ignoring onPause: session inactive")
+                return
+            }
+            player.pause(); publishState(PlaybackStateCompat.STATE_PAUSED)
+        }
+        override fun onSeekTo(pos: Long) {
+            if (!mediaSession.isActive) return
+            player.seekTo(pos)
+        }
+        override fun onSkipToNext() {
+            if (!mediaSession.isActive) return
+            onNext?.invoke()
+        }
+        override fun onSkipToPrevious() {
+            if (!mediaSession.isActive) return
+            onPrev?.invoke()
+        }
     }
 
     var onNext: (() -> Unit)? = null
     var onPrev: (() -> Unit)? = null
 
-    fun setSessionActive(active: Boolean) { mediaSession.isActive = active }
+    fun setSessionActive(active: Boolean) {
+        mediaSession.isActive = active
+        if (!active) {
+
+        abandonAudioFocus()
+    } }
 
     fun publishState(state: Int) {
         mediaSession.setPlaybackState(

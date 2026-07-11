@@ -28,8 +28,11 @@ import ani.saikou.settings.PlayerSettings
 import ani.saikou.snackString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.lang.ref.WeakReference
@@ -65,6 +68,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _volume = MutableStateFlow(100)
     val volume: StateFlow<Int> = _volume.asStateFlow()
+
+    private val _volumeChangeEvent = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val volumeChangeEvent: SharedFlow<Int> = _volumeChangeEvent.asSharedFlow()
 
     private val _playbackSpeed = MutableStateFlow(1.0f)
     val playbackSpeed: StateFlow<Float> = _playbackSpeed.asStateFlow()
@@ -144,7 +150,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as PlaybackService.LocalBinder).service
             _playbackServiceRef = WeakReference(service)
-            service.setSessionActive(true)
 
             val mediaDetailsModel = boundMediaDetailsModel?.get()
             if (mediaDetailsModel == null) {
@@ -166,7 +171,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-
+    fun setMediaSessionActive(active: Boolean) {
+        playbackService?.let { service ->
+            Log.d("mpv", "Setting media session active state to: $active")
+            service.setSessionActive(active)
+        } ?: Log.w("mpv", "Cannot toggle media session state; service not bound yet.")
+    }
     fun bindService(activity: AppCompatActivity, mediaDetailsModel: MediaDetailsViewModel) {
         boundMediaDetailsModel = WeakReference(mediaDetailsModel)
 
@@ -224,6 +234,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         discordRPC.connect()
 
+        playbackService?.let { service ->
+            val audioManager = service.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val maxVol = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+            val currentSysVol = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+
+            val actualSystemPercentage = if (maxVol > 0) ((currentSysVol.toFloat() / maxVol.toFloat()) * 100f).toInt() else 100
+
+            _volume.value = actualSystemPercentage
+            playerInstance.setVolume(actualSystemPercentage)
+        }
+
         stateJobs += viewModelScope.launch {
             playerInstance.playbackState.collect { state ->
                 _playbackState.value = state
@@ -234,6 +255,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 discordRPC.onPlaybackChanged(playingNow, playerInstance.currentPosition.value)
             }
         }
+
         stateJobs += viewModelScope.launch {
             playerInstance.isPlaying.collect { isPlaying ->
                 _isPlaying.value = isPlaying
@@ -253,7 +275,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 _duration.value = it
             }
         }
-        stateJobs += viewModelScope.launch { playerInstance.volume.collect { _volume.value = it } }
+        stateJobs += viewModelScope.launch {
+            playerInstance.volume.collect { mediaVolume ->
+                _volume.value = mediaVolume
+            }
+        }
         stateJobs += viewModelScope.launch {
             playerInstance.playbackSpeed.collect {
                 _playbackSpeed.value = it
@@ -496,13 +522,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun loadSkipTimes(media: Media, episodeNumber: Int, durationMs: Long) {
         viewModelScope.launch(Dispatchers.IO) {
-            val result = if (settings.useAlternativeTimestampProvider) {
-                repository.fetchSkipTimes(media.id, episodeNumber, durationMs)
+            var result: List<SkipInterval>?
+
+            if (settings.useAlternativeTimestampProvider) {
+                result = repository.fetchSkipTimes(media.id, episodeNumber, durationMs)
+
+                if (result.isNullOrEmpty()) {
+                    result = media.idMAL?.let {
+                        repository.fetchAniSkipTimes(it, episodeNumber, durationMs / 1000)
+                    }
+                }
             } else {
-                media.idMAL?.let { malId ->
-                    repository.fetchAniSkipTimes(
-                        malId, episodeNumber, durationMs / 1000
-                    )
+                result = media.idMAL?.let {
+                    repository.fetchAniSkipTimes(it, episodeNumber, durationMs / 1000)
                 }
             }
 
@@ -641,6 +673,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playbackService?.setSystemVolume(level)
         player?.setVolume(level)
         _volume.value = level
+        _volumeChangeEvent.tryEmit(level)
     }
 
     fun detachPlayerState() {

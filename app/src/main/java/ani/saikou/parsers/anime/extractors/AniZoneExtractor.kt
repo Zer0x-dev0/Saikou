@@ -58,9 +58,10 @@ class AniZoneExtractor(override val server: VideoServer) : VideoExtractor() {
 
 
             val videos = response.data.sources.map {
+                val videoType = if (it.isM3u8) VideoType.M3U8 else VideoType.CONTAINER
                 Video(
                     quality = null,
-                    format = VideoType.M3U8,
+                    format = videoType,
                     file = FileUrl(it.url),
                     extraNote = it.type
                 )
