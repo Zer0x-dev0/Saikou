@@ -947,7 +947,20 @@ suspend fun View.pop() {
 
 
 
-fun decryptTobeparsed(base64Payload: String): String {
+fun decryptTobeparsed(payload: String): String {
+    return try {
+        // New logic: Hex decode -> Reverse bytes -> Decode to String
+        payload.chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
+            .reversedArray()
+            .decodeToString()
+    } catch (e: Exception) {
+        decryptTobeparsedOld(payload)
+    }
+}
+
+fun decryptTobeparsedOld(base64Payload: String): String {
     val SECRET = "Xot36i3lK3"
     val IV = 12
     val TAG = 16

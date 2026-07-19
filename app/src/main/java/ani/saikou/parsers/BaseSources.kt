@@ -74,7 +74,7 @@ abstract class MangaReadSources : BaseSources() {
         val map = mutableMapOf<String, MangaChapter>()
         val parser = get(i)
         tryWithSuspend(true) {
-            parser.loadChapters(show.link, show.extra).forEach {
+            parser.loadChapters(show.link, show.extra).sortedBy { it.number.toFloatOrNull() ?: 0f }.forEach {
                 map[it.number] = MangaChapter(it)
             }
         }

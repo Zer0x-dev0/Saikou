@@ -178,12 +178,12 @@ class MangaReaderActivity : AppCompatActivity() {
 
         binding.mangaReaderTitle.text = media.userPreferredName
 
-        chaptersArr = chapters.keys.toList()
+        chaptersArr = chapters.keys.toList().sortedBy { it.toFloatOrNull() ?: 0f }
         currentChapterIndex = chaptersArr.indexOf(media.manga!!.selectedChapter)
 
         chaptersTitleArr = arrayListOf()
-        chapters.forEach {
-            val chapter = it.value
+        chaptersArr.forEach { key ->
+            val chapter = chapters[key]!!
             chaptersTitleArr.add("${if (!chapter.title.isNullOrEmpty() && chapter.title != "null") "" else "Chapter "}${chapter.number}${if (!chapter.title.isNullOrEmpty() && chapter.title != "null") " : " + chapter.title else ""}")
         }
 

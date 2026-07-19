@@ -2,9 +2,7 @@ package ani.saikou.parsers.manga
 
 import android.util.Log
 import ani.saikou.FileUrl
-import ani.saikou.Mapper
 import ani.saikou.client
-import ani.saikou.decryptTobeparsed
 import ani.saikou.parsers.MangaChapter
 import ani.saikou.parsers.MangaImage
 import ani.saikou.parsers.MangaParser
@@ -16,8 +14,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 @OptIn(InternalSerializationApi::class)
 class AllManga : MangaParser() {
@@ -27,18 +23,20 @@ class AllManga : MangaParser() {
 
     override val hostUrl: String = "https://api.allanime.day/api"
     private val posterBase = "https://wp.youtube-anime.com/aln.youtube-anime.com/"
-    private val imageReferer = "https://allmanga.to/"
+    private val imageReferer = "https://mkissa.to/"
 
     private val mapper = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
-    private val headers = mapOf(
 
+    private val headers = mapOf(
         "Accept" to "application/json",
         "Accept-Language" to "en-US,en;q=0.9",
         "Content-Type" to "application/json",
-        "Origin" to "https://allmanga.to"
+        "Origin" to "https://mkissa.to",
+        "Referer" to "https://mkissa.to/",
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
     )
 
     private fun buildQuery(queryAction: () -> String): String =
@@ -61,16 +59,19 @@ class AllManga : MangaParser() {
         }
         """
     }
-//
-//    private val pageQuery = buildQuery {
-//        """
-//        query (%id: String!, %translationType: VaildTranslationTypeMangaEnumType!, %chapterNum: String!) {
-//            chapterPages(mangaId: %id, translationType: %translationType, chapterString: %chapterNum) {
-//                edges { pictureUrlHead pictureUrls }
-//            }
-//        }
-//        """
-//    }
+
+    private val pageQuery = buildQuery {
+        """
+        query (%mangaId: String!, %chapterString: String!, %translationType: VaildTranslationTypeMangaEnumType!) {
+            chaptersForRead(mangaId: %mangaId, chapterString: %chapterString, translationType: %translationType) {
+                edges {
+                    pictureUrlHead
+                    pictureUrls
+                }
+            }
+        }
+        """
+    }
 
     override suspend fun search(query: String): List<ShowResponse> = tryWithSuspend {
         if (query.isBlank()) return@tryWithSuspend emptyList<ShowResponse>()
@@ -91,7 +92,7 @@ class AllManga : MangaParser() {
             val compositeId = "${createSlug(it.name ?: it.englishName)}-${it._id}"
             ShowResponse(
                 name = title, link = compositeId, coverUrl = FileUrl(
-                    posterBase + (it.thumbnail ?: ""), mapOf("Referer" to "https://allmanga.to/")
+                    posterBase + (it.thumbnail ?: ""), mapOf("Referer" to imageReferer)
                 )
             )
         } ?: emptyList()
@@ -101,91 +102,73 @@ class AllManga : MangaParser() {
         mangaLink: String, extra: Map<String, String>?
     ): List<MangaChapter> = tryWithSuspend {
         val mediaId = mangaLink.substringAfterLast("-")
+        Log.d("MANGA_API", "Fetching chapters for mediaId: $mediaId")
 
         val jsonBody =
             mapper.encodeToString(DetailsGraphQLRequest(detailsQuery, IdVariable(mediaId)))
-        val response = client.post(hostUrl, headers = headers, json = JsonAsString(jsonBody))
-            .parsed<DetailsResponse>()
+        val responseRaw = client.post(hostUrl, headers = headers, json = JsonAsString(jsonBody))
+        
+        val response = responseRaw.parsed<DetailsResponse>()
 
+        val detail = response.data?.manga?.availableChaptersDetail
+        val chapters = (detail?.sub ?: emptyList()) + (detail?.raw ?: emptyList())
 
-        response.data?.manga?.availableChaptersDetail?.sub?.map { rawChapterStr ->
+        Log.d("MANGA_API", "Found ${chapters.size} chapters")
+
+        chapters.distinct().map { rawChapterStr ->
             MangaChapter(
                 number = rawChapterStr, link = "${mediaId}-chapter-$rawChapterStr"
             )
-        }?.sortedBy { it.number.toFloatOrNull() ?: 0f } ?: emptyList()
+        }.sortedBy { it.number.toFloatOrNull() ?: 0f }
     } ?: emptyList()
 
     override suspend fun loadImages(chapterLink: String): List<MangaImage> = tryWithSuspend {
-
         val match = Regex("(.+)-chapter-(.+)", RegexOption.IGNORE_CASE).find(chapterLink)
             ?: return@tryWithSuspend emptyList<MangaImage>()
 
         val mangaId = match.groupValues[1]
         val chapterNumStr = match.groupValues[2]
 
-        Log.d("MANGA_API", "📥 Chapter: $chapterLink")
+        Log.d("MANGA_API", "📥 Loading Images for: $mangaId, Chapter: $chapterNumStr")
 
-        val variables = """
-        {
-          "mangaId":"$mangaId",
-          "translationType":"sub",
-          "chapterString":"$chapterNumStr",
-          "limit":100,
-          "offset":0
-        }
-    """.trimIndent()
+        val variables = PageVariables(
+            mangaId = mangaId,
+            chapterString = chapterNumStr,
+            translationType = "sub"
+        )
 
-        val extensions = """
-        {
-          "persistedQuery":{
-            "version":1,
-            "sha256Hash":"466783e19a7540387e34265be906bebbe853857088d45d28af922ab8668ebb31"
-          }
-        }
-    """.trimIndent()
+        val jsonRequest = PageGraphQLRequest(pageQuery, variables)
+        val jsonBody = mapper.encodeToString(jsonRequest)
 
-        val url = buildString {
-            append(hostUrl)
-            append("?variables=")
-            append(encode(variables))
-            append("&extensions=")
-            append(encode(extensions))
+        val responseRaw = client.post(hostUrl, headers = headers, json = JsonAsString(jsonBody))
+        
+        val response = responseRaw.parsed<PageResponse>()
+
+        val edges = response.data?.chaptersForRead?.edges ?: emptyList()
+        if (edges.isEmpty()) {
+            Log.e("MANGA_API", "No edges found in chaptersForRead")
+            return@tryWithSuspend emptyList<MangaImage>()
         }
 
+        val images = edges.firstOrNull { it.pictureUrls.isNotEmpty() }?.let { itEdge ->
+            var head = itEdge.pictureUrlHead ?: "aln.youtube-anime.com"
+            if (!head.startsWith("http")) head = "https://$head"
+            if (!head.endsWith("/")) head += "/"
 
-        val raw = client.get(url, headers = headers)
-
-
-
-        val parsed = raw.parsed<TobeparsedResponse>()
-
-        val encrypted = parsed.data?.tobeparsed
-            ?: return@tryWithSuspend emptyList<MangaImage>()
-
-
-
-
-        val decryptedJson = decryptTobeparsed(encrypted)
-
-
-
-
-        val response = Mapper.json.decodeFromString<PageResponse>(decryptedJson)
-
-
-        response.chapterPages.edges.flatMap { edge ->
-            edge.pictureUrls.map { pic ->
+            itEdge.pictureUrls.map { pic ->
+                val url = if (pic.url.startsWith("/")) pic.url.substring(1) else pic.url
                 MangaImage(
                     FileUrl(
-                        edge.pictureUrlHead + pic.url,
+                        head + url,
                         mapOf("Referer" to imageReferer)
                     )
                 )
             }
-        }
+        } ?: emptyList()
 
+        Log.d("MANGA_API", "Found ${images.size} images. First URL: ${images.firstOrNull()?.url?.url}")
+        images
     } ?: emptyList()
-
 
     @Serializable
     data class SearchGraphQLRequest(
@@ -224,9 +207,9 @@ class AllManga : MangaParser() {
 
     @Serializable
     data class PageVariables(
-        @SerialName("id") val id: String,
-        @SerialName("translationType") val translationType: String,
-        @SerialName("chapterNum") val chapterNum: String
+        @SerialName("mangaId") val mangaId: String,
+        @SerialName("chapterString") val chapterString: String,
+        @SerialName("translationType") val translationType: String
     )
 
     @Serializable
@@ -236,8 +219,11 @@ class AllManga : MangaParser() {
     data class DetailsResponse(val data: DetailsData? = null)
 
     @Serializable
-    data class PageResponse(
-        val chapterPages: ChapterPages
+    data class PageResponse(val data: PageData? = null)
+
+    @Serializable
+    data class PageData(
+        @SerialName("chaptersForRead") val chaptersForRead: ChapterPages? = null
     )
 
     @Serializable
@@ -247,7 +233,7 @@ class AllManga : MangaParser() {
     data class MangaConnection(val edges: List<SearchManga> = emptyList())
 
     @Serializable
-    data class SearchManga(
+    class SearchManga(
         val _id: String,
         val name: String? = null,
         val englishName: String? = null,
@@ -262,35 +248,25 @@ class AllManga : MangaParser() {
     data class MangaDetails(val availableChaptersDetail: AvailableChaptersDetail? = null)
 
     @Serializable
-    data class AvailableChaptersDetail(val sub: List<String> = emptyList())
-
-    @Serializable
-    data class PageData(val chapterPages: ChapterPages? = null)
+    data class AvailableChaptersDetail(
+        val sub: List<String> = emptyList(),
+        val raw: List<String> = emptyList()
+    )
 
     @Serializable
     data class ChapterPages(val edges: List<Edge> = emptyList())
 
     @Serializable
     data class Edge(
-        val pictureUrlHead: String,
+        val pictureUrlHead: String? = null,
         val pictureUrls: List<PictureUrl>
     )
     @Serializable
     data class PictureUrl(
-        val num: Int,
-        val url: String
+        val url: String,
+        val num: Int? = null
     )
 
-    @Serializable
-    data class TobeparsedResponse(
-        val data: InnerData? = null
-    )
-
-    @Serializable
-    data class InnerData(
-        val _m: String? = null,
-        val tobeparsed: String? = null
-    )
     private fun createSlug(text: String?): String =
         text?.lowercase()?.replace("[^a-z0-9]+".toRegex(), "-")?.trim('-') ?: "unknown"
 }
