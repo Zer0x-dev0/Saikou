@@ -1,70 +1,65 @@
 package ani.saikou.parsers.anime
 
-import ani.saikou.BuildConfig
 import ani.saikou.FileUrl
 import ani.saikou.client
-
 import ani.saikou.parsers.AnimeApiParser
-import ani.saikou.parsers.AnimeParser
 import ani.saikou.parsers.Episode
 import ani.saikou.parsers.ShowResponse
 import ani.saikou.parsers.VideoExtractor
 import ani.saikou.parsers.VideoServer
-import ani.saikou.parsers.anime.extractors.Kwik
+import ani.saikou.parsers.anime.extractors.MegaPlay
 import ani.saikou.tryWithSuspend
 import kotlinx.serialization.InternalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlin.collections.mapOf
+import java.net.URLEncoder
 
 @OptIn(InternalSerializationApi::class)
-class AnimePahe : AnimeApiParser() {
+class Gogoanime : AnimeApiParser() {
 
-    override val name = "AnimePahe"
-    override val saveName = "animepahe"
-    override val providerName = "animepahe"
-    override val useCache: Boolean = false
-//    override val hostUrl: String = BuildConfig.SERVER_URL
+    override val name = "Gogoanime"
+    override val saveName = "gogoanime"
+    override val providerName = "gogo"
+    override val malSyncBackupName = "Gogoanime"
     override val isDubAvailableSeparately = false
 
-
     override suspend fun search(query: String): List<ShowResponse> {
-        return tryWithSuspend(post = false, snackbar = true) {
+        return tryWithSuspend(post = true, snackbar = true) {
             if (query.isBlank()) return@tryWithSuspend emptyList()
+
+            val encoded = URLEncoder.encode(query, "utf-8")
             val res = client.get(
-                "$hostUrl/api/animepahe/anime/search?q=$query",
+                "$hostUrl/api/gogo/anime/search?q=$encoded",
                 headers = mapOf("x-api-key" to apiKey)
             ).parsed<SearchApiResponse>()
 
             res.data.map {
+                val title = it.name ?: it.title ?: it.romaji ?: "Unknown"
                 ShowResponse(
-                    name = it.name,
+                    name = title,
                     link = it.id,
-                    coverUrl = FileUrl(it.posterImage)
+                    coverUrl = FileUrl(it.posterImage ?: "")
                 )
             }
-
         } ?: emptyList()
     }
-
 
     override suspend fun loadEpisodes(
         animeLink: String,
         extra: Map<String, String>?
     ): List<Episode> {
-        return tryWithSuspend(post = false, snackbar = true) {
-            val url = "$hostUrl/api/animepahe/anime/$animeLink"
-            val res =
-                client.get(url, headers = mapOf("x-api-key" to apiKey)).parsed<EpisodesResponse>()
-            res.providerEpisodes.map { ep ->
-                Episode(
-                    number = ep.episodeNumber.toString(),
-                    link = ep.episodeId,
-                    title = ep.title,
-                    thumbnail = ep.thumbnail
+        return tryWithSuspend(post = true, snackbar = true) {
+            if (animeLink.isBlank()) return@tryWithSuspend emptyList()
 
+            val url = "$hostUrl/api/gogo/anime/$animeLink/episodes"
+            val res = client.get(url, headers = mapOf("x-api-key" to apiKey)).parsed<EpisodesResponse>()
+
+            res.data.map { ep ->
+                Episode(
+                    number = ep.episodeNumber?.toString() ?: "0",
+                    link = ep.episodeId,
+                    title = ep.title ?: "Episode ${ep.episodeNumber}",
                 )
             }
-
         } ?: emptyList()
     }
 
@@ -73,36 +68,35 @@ class AnimePahe : AnimeApiParser() {
         extra: Map<String, String>?
     ): List<VideoServer> {
         return tryWithSuspend(post = false, snackbar = true) {
+            if (episodeLink.isBlank()) return@tryWithSuspend emptyList()
             val res = client.get(
-                "$hostUrl/api/animepahe/episode/$episodeLink/servers",
+                "$hostUrl/api/gogo/episode/$episodeLink/servers",
                 headers = mapOf("x-api-key" to apiKey)
             ).parsed<EpisodeServersResponse>()
 
             val allServers = mutableListOf<VideoServer>()
 
+            fun addServers(version: String, list: List<ServerItem>) {
+                list.forEach { item ->
+                    val serverName = "${version.uppercase()} - ${item.serverName}"
+                    val embedUrl = "$hostUrl/api/gogo/sources/$episodeLink?version=$version&server=${item.serverName}"
+                    allServers += VideoServer(
+                        name = serverName,
+                        embed = FileUrl(embedUrl)
+                    )
+                }
+            }
 
-            if (res.data?.sub?.isNotEmpty() == true) {
-                allServers += VideoServer(
-                    name = "Sub - Multi Quality",
-                    embed = FileUrl("$hostUrl/api/animepahe/sources/$episodeLink?version=sub")
-                )
-            }
-            if (res.data?.dub?.isNotEmpty() == true) {
-                allServers += VideoServer(
-                    name = "Dub - Multi Quality",
-                    embed = FileUrl("$hostUrl/api/animepahe/sources/$episodeLink?version=dub")
-                )
-            }
+            addServers("sub", res.data?.sub ?: emptyList())
+            addServers("dub", res.data?.dub ?: emptyList())
 
             allServers
         } ?: emptyList()
     }
 
-    @OptIn(InternalSerializationApi::class)
     override suspend fun getVideoExtractor(server: VideoServer): VideoExtractor {
-        return Kwik(server)
+        return MegaPlay(server)
     }
-
 
     @Serializable
     private data class SearchApiResponse(
@@ -112,22 +106,22 @@ class AnimePahe : AnimeApiParser() {
     @Serializable
     private data class SearchItems(
         val id: String,
-        val name: String,
-        val posterImage: String
-
+        val name: String? = null,
+        val title: String? = null,
+        val romaji: String? = null,
+        val posterImage: String? = null
     )
 
     @Serializable
     private data class EpisodesResponse(
-        val providerEpisodes: List<EpisodeItem> = emptyList()
+        val data: List<EpisodeItem> = emptyList()
     )
 
     @Serializable
     private data class EpisodeItem(
         val episodeId: String,
-        val episodeNumber: Int,
-        val thumbnail: String,
-        val title: String? = null
+        val title: String? = null,
+        val episodeNumber: Int? = null,
     )
 
     @Serializable
@@ -138,8 +132,7 @@ class AnimePahe : AnimeApiParser() {
     @Serializable
     private data class ServerItem(
         val serverName: String,
-        val serverId: String,
-        val mediaId: String
+        val serverId: String
     )
 
     @Serializable
@@ -147,8 +140,6 @@ class AnimePahe : AnimeApiParser() {
         val sub: List<ServerItem> = emptyList(),
         val dub: List<ServerItem> = emptyList(),
         val raw: List<ServerItem> = emptyList(),
-        val episodeNumber: Int
+        val episodeNumber: Int? = null
     )
-
-
 }

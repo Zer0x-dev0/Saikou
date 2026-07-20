@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 @OptIn(InternalSerializationApi::class)
 abstract class AnimeApiParser : AnimeParser() {
 
-    override val hostUrl: String = BuildConfig.SERVER_URL
+    override val hostUrl: String = BuildConfig.SERVER_URL.let { if (it.isBlank() || !it.startsWith("http")) "https://kenjitsu-api.onrender.com" else it }
 
     open val apiKey: String = BuildConfig.MY_CUSTOM_API_KEY
     abstract val providerName: String
@@ -29,7 +29,7 @@ abstract class AnimeApiParser : AnimeParser() {
             return cached
         }
 
-        return tryWithSuspend(post = false, snackbar = true) {
+        val result = tryWithSuspend(post = false, snackbar = false) {
             setUserText("Searching: ${mediaObj.name ?: mediaObj.userPreferredName ?: mediaObj.nameRomaji}")
 
             val url = "$hostUrl/api/anilist/episodes/$anilistId?provider=$providerName"
@@ -47,25 +47,24 @@ abstract class AnimeApiParser : AnimeParser() {
             }
 
             if (mappedEpisodes.isEmpty()) {
-                setUserText("No episodes found")
-                return@tryWithSuspend null
+                null
+            } else {
+                val title = res.provider.name ?: res.provider.romaji ?: "Unknown"
+                setUserText("Found: $title")
+
+                val response = ShowResponse(
+                    name = title,
+                    link = res.provider.id,
+                    coverUrl = FileUrl(mediaObj.cover ?: ""),
+                    episodes = mappedEpisodes
+                )
+
+                showCache[anilistId] = response
+                response
             }
-
-            val title = res.provider.name ?: res.provider.romaji ?: "Unknown"
-            setUserText("Found: $title")
-
-
-            val response = ShowResponse(
-                name = title,
-                link = res.provider.id,
-                coverUrl = FileUrl(mediaObj.cover ?: ""),
-                episodes = mappedEpisodes
-            )
-
-            showCache[anilistId] = response
-
-            response
         }
+
+        return result ?: super.autoSearch(mediaObj)
     }
 
     @Serializable

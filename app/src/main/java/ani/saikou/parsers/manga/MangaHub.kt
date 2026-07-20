@@ -24,7 +24,7 @@ class MangaHub : MangaParser() {
     override val saveName = "manga_hub"
     override val hostUrl = "https://api.mghcdn.com/graphql"
 
-    val apiBaseUrl: String = BuildConfig.SERVER_URL
+    val apiBaseUrl: String = BuildConfig.SERVER_URL.let { if (it.isBlank() || !it.startsWith("http")) "https://kenjitsu-api.onrender.com" else it }
     val apiKey: String = BuildConfig.MY_CUSTOM_API_KEY
     private val mapper = Json {
         ignoreUnknownKeys = true

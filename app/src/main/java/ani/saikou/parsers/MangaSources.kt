@@ -9,6 +9,7 @@ object MangaSources : MangaReadSources() {
 
         "AllManga" to ::AllManga,
         "MangaK" to ::MangaK,
+        "MangaHub" to :: MangaHub,
         "WeebCentral" to ::WeebCentral,
         "MangaHub" to ::MangaHub,
         "MangaRead" to ::MangaRead,

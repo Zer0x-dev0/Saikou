@@ -6,6 +6,7 @@ import ani.saikou.parsers.anime.AllAnime
 import ani.saikou.parsers.anime.Anikoto
 
 import ani.saikou.parsers.anime.AnimePahe
+import ani.saikou.parsers.anime.Gogoanime
 //import ani.saikou.parsers.anime.Aniwatchtv
 import ani.saikou.parsers.anime.Haho
 import ani.saikou.parsers.anime.HentaiFF
@@ -22,11 +23,12 @@ object AnimeSources : WatchSources() {
 
 //        "AllAnime" to ::AllAnime,
 //        "AniDB" to ::AniDB,
+//        "Gogoanime" to ::Gogoanime,
         "Anikoto" to ::Anikoto,
         "AniBD" to ::AniBD,
 //        "AnimePahe" to ::AnimePahe,
         "Anizone" to ::Anizone,
-        "AnimeHeaven" to ::AnimeHeaven
+//        "AnimeHeaven" to ::AnimeHeaven
         )
 }
 

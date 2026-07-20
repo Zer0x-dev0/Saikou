@@ -92,7 +92,7 @@ class AnimeHeaven : AnimeApiParser() {
 
     @Serializable
     private data class SearchApiResponse(
-        val data: List<SearchItems>
+        val data: List<SearchItems> = emptyList()
     )
 
     @Serializable
@@ -106,7 +106,7 @@ class AnimeHeaven : AnimeApiParser() {
 
     @Serializable
     private data class EpisodesResponse(
-        val data: List<EpisodeItem>
+        val data: List<EpisodeItem> = emptyList()
     )
 
     @Serializable

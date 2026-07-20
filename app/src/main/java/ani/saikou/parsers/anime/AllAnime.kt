@@ -128,7 +128,7 @@ class AllAnime : AnimeApiParser() {
     // ====================== DATA CLASSES ======================
 
     @Serializable
-    private data class SearchApiResponse(val data: List<SearchItems>)
+    private data class SearchApiResponse(val data: List<SearchItems> = emptyList())
 
     @Serializable
     private data class SearchItems(
@@ -140,7 +140,7 @@ class AllAnime : AnimeApiParser() {
 
     @Serializable
     private data class EpisodesResponse(
-        val data: List<EpisodeItem>
+        val data: List<EpisodeItem> = emptyList()
     )
 
     @Serializable
