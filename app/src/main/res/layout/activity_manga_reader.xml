@@ -411,7 +411,6 @@
                         android:scaleY="1.5"
                         android:src="@drawable/ic_round_skip_previous_24"
                         tools:ignore="DuplicateSpeakableTextCheck,ImageContrastCheck" />
-
                 </androidx.cardview.widget.CardView>
 
                 <LinearLayout

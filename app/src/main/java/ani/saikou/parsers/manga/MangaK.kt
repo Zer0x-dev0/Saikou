@@ -14,6 +14,8 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 
 @OptIn(InternalSerializationApi::class)
@@ -31,7 +33,7 @@ class MangaK : MangaParser() {
 
     override suspend fun search(query: String): List<ShowResponse> {
 
-        val url = "$apiUrl/titles/search?exclude=yaoi&page=1&limit=7&q=$query"
+        val url = "$apiUrl/titles/search?exclude=yaoi&page=1&limit=7&q=${URLEncoder.encode(query, StandardCharsets.UTF_8.toString())}"
 
         return try {
 
@@ -76,13 +78,14 @@ class MangaK : MangaParser() {
             val body = response.body.string()
             val res = json.decodeFromString<ChapterResponse>(body ?: "")
 
-            val sorted = res.data.chapters
-                .sortedBy { it.chapterNumber ?: Float.MAX_VALUE }
-            val result = sorted.map {
+            val result = res.data.chapters.map {
+                val name = it.name
+                val chapterNum = it.chapterNumber ?: name.substringAfter("Chapter ").substringBefore(":").substringBefore(" ").trim().toFloatOrNull()
+
                 MangaChapter(
-                    number = it.chapterNumber?.toString() ?: it.name,
+                    number = chapterNum?.let { n -> if (n % 1 == 0f) n.toInt().toString() else n.toString() } ?: name,
                     link = it.url,
-                    title = it.name
+                    title = if (name.startsWith("Chapter", ignoreCase = true) && (name.contains(":") || name.split(" ").size > 2)) name else null
                 )
             }
 
