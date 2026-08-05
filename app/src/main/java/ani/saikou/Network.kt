@@ -105,10 +105,15 @@ fun logError(e: Throwable, post: Boolean = true, snackbar: Boolean = true) {
     e.printStackTrace(pw)
     val stackTrace: String = sw.toString()
     if (post) {
+        val message = when (e) {
+            is java.net.UnknownHostException -> "Host resolution failed. Check your SERVER_URL."
+            is java.lang.IllegalArgumentException -> if (e.message?.contains("unexpected url") == true) "Invalid URL. Check your SERVER_URL." else e.localizedMessage
+            else -> e.localizedMessage
+        }
         if (snackbar)
-            snackString(e.localizedMessage, null, stackTrace)
+            snackString(message, null, stackTrace)
         else
-            toast(e.localizedMessage)
+            toast(message)
     }
     e.printStackTrace()
 }
